@@ -1,0 +1,27 @@
+# Entornos virtuales
+.venv/
+venv/
+
+# Archivos de dependencias de pip
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Archivos temporales
+*.log
+*.sqlite3
+
+# Configuración local
+.env
+
+# Docker
+**/__pycache__/
+.docker/
+
+# VSCode / PyCharm
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
