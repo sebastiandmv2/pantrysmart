@@ -16,7 +16,6 @@ This project contains:
 Clone the repo:
 ```bash
 git clone https://github.com/sebastiandmv2/pantrysmart.git
-cd pantrysmart_app
 ```
 
 Move into the app project folder:
@@ -29,21 +28,33 @@ Copy environment variables:
 cp .env.example .env
 ```
 
+Edit `api/.env` and set your OpenAI API key:
+```env
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o-mini
+```
+
 Build and run everything:
 ```bash
-docker compose up --build
+make upd
 ```
 
 The backend will be available at:
 - API: http://localhost:8000
 - Interactive docs (Swagger UI): http://localhost:8000/docs
+- Alternative docs (ReDoc): http://localhost:8000/redoc
 - Adminer (MySQL): http://localhost:8080
 
 ## 📌 Current Endpoints
 
 - `GET /health` → Check if the API is alive
-- `POST /process/image` → Upload an image and receive a placeholder JSON
-- `POST /ingest` → Send a JSON payload and store it in MySQL
+- `POST /extract-receipt` → Upload a receipt image (jpg/png) and receive structured JSON
+  - Example with curl:
+    ```bash
+    curl -X POST http://localhost:8000/extract-receipt \
+      -H "Accept: application/json" \
+      -F "file=@/path/to/receipt.jpg"
+    ```
 
 ## 🗂 Environment Variables
 
@@ -62,4 +73,19 @@ DATABASE_URL=mysql+pymysql://appuser:apppass@db:3306/appdb
 API_PORT=8000
 DB_PORT=3306
 ADMINER_PORT=8080
+
+# OpenAI
+OPENAI_API_KEY=your_openai_key
+OPENAI_MODEL=gpt-4o-mini
 ```
+
+## 🛠 Useful Make commands
+
+- `make up` → build & run containers (foreground)  
+- `make upd` → build & run containers (detached)  
+- `make down` → stop containers  
+- `make logs` → view logs  
+- `make bash` → open shell in API container  
+- `make versions` → show versions of key dependencies  
+- `make list` → list all dependencies installed in container  
+- `make freeze` → update requirements.txt with installed dependencies  
