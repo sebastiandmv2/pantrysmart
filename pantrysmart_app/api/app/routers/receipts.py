@@ -1,8 +1,15 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+from app.db import get_db
+from app.models import Receipt, ReceiptItem
+from app.schemas import ReceiptConfirmIn, ReceiptOut
 from openai import OpenAI
 import os, base64, json
+from typing import List
 
 router = APIRouter()
+
+DEMO_USER_ID = os.getenv("DEMO_USER_ID", "demo-user")
 
 SYSTEM_MSG = (
   "Eres un extractor de boletas de supermercado (Chile y LATAM). "
@@ -66,7 +73,7 @@ RECEIPT_SCHEMA = {
 def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("utf-8")
 
-@router.post("/extract-receipt")
+@router.post("/receipts/extract-receipt", tags=["receipts"])
 async def extract_receipt(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Se requiere una imagen (content-type image/*).")
@@ -109,3 +116,53 @@ async def extract_receipt(file: UploadFile = File(...)):
         data.pop(k, None)
 
     return data
+
+@router.post("/receipts/confirm", response_model=ReceiptOut, tags=["receipts"])
+def confirm_receipt(payload: ReceiptConfirmIn, db: Session = Depends(get_db)):
+    # Validación mínima de categorías
+    allowed = ['Alimentos','Bebidas','Higiene','Limpieza','Salud','Mascotas','Hogar','Bebé','Alcohol','Otros']
+    for it in payload.items:
+        if it.category not in allowed:
+            raise HTTPException(status_code=400, detail=f"Invalid category: {it.category}")
+
+    user_id = payload.user_id or DEMO_USER_ID   # <<< fallback aquí
+
+    # Crear receipt
+    r = Receipt(
+        user_id=user_id,
+        store=payload.store,
+        date=payload.date,
+        time=payload.time,
+        subtotal=payload.subtotal,
+    )
+    db.add(r)
+    db.flush()  # obtiene r.id
+
+    # Crear items
+    for it in payload.items:
+        db.add(ReceiptItem(
+            receipt_id=r.id,
+            product_name=it.product_name,
+            category=it.category,
+            quantity=it.quantity,
+            unit_price=it.unit_price,
+            total_price=it.total_price,
+        ))
+
+    db.commit()
+    db.refresh(r)
+    return r
+
+@router.get("/receipts/{receipt_id}", response_model=ReceiptOut, tags=["receipts"])
+def get_receipt(receipt_id: int, db: Session = Depends(get_db)):
+    r = db.get(Receipt, receipt_id)
+    if not r:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    return r
+
+@router.get("/receipts/user/{user_id}", response_model=List[ReceiptOut], tags=["receipts"])
+def list_receipts_by_user(user_id: str, db: Session = Depends(get_db)):
+    receipts = db.query(Receipt).filter(Receipt.user_id == user_id).all()
+    if not receipts:
+        raise HTTPException(status_code=404, detail="No receipts found for this user")
+    return receipts
