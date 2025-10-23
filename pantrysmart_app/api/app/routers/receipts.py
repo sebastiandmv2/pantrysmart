@@ -73,6 +73,28 @@ RECEIPT_SCHEMA = {
 def _b64(data: bytes) -> str:
     return base64.b64encode(data).decode("utf-8")
 
+@router.post("/receipts/debug-upload", tags=["receipts"])
+async def debug_upload(file: UploadFile = File(...)):
+    """Endpoint de debug para verificar que la imagen se recibe correctamente"""
+    print(f"Received file: {file.filename}")
+    print(f"Content type: {file.content_type}")
+    print(f"File size: {file.size if hasattr(file, 'size') else 'unknown'}")
+    
+    if not file.content_type or not file.content_type.startswith("image/"):
+        return {"error": "Se requiere una imagen", "received_type": file.content_type}
+    
+    # Leer algunos bytes para verificar
+    content = await file.read()
+    print(f"Content length: {len(content)} bytes")
+    
+    return {
+        "success": True,
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": len(content),
+        "first_bytes": content[:10].hex() if content else "empty"
+    }
+
 @router.post("/receipts/extract-receipt", tags=["receipts"])
 async def extract_receipt(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):

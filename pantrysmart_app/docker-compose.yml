@@ -37,6 +37,26 @@ services:
     volumes:
       - ./api:/app  # hot-reload en desarrollo
 
+  mobile:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile
+    container_name: pantrysmart_mobile
+    env_file: .env
+    environment:
+      - EXPO_DEVTOOLS_LISTEN_ADDRESS=0.0.0.0
+      - REACT_NATIVE_PACKAGER_HOSTNAME=${MOBILE_HOST:-0.0.0.0}
+      - API_URL=http://api:8000
+    ports:
+      - "${MOBILE_PORT:-8081}:8081"  # Metro bundler
+      - "${EXPO_PORT:-19000}:19000"  # Expo dev server
+      - "${EXPO_PORT_1:-19001}:19001"  # Expo dev server websocket
+      - "${EXPO_PORT_2:-19002}:19002"  # Expo dev server
+    volumes:
+      - ./mobile:/app  # hot-reload en desarrollo
+      - /app/node_modules  # evitar conflictos con node_modules del host
+    command: ["npm", "run", "start-lan"]
+
   adminer:
     image: adminer:latest
     container_name: pantrysmart_adminer
