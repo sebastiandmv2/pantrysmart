@@ -30,7 +30,18 @@ export const useReceiptScan = () => {
       setLoading(true);
       setError(null);
       
-      const result = await apiService.receipts.confirmReceipt(receiptData);
+      // Transformar datos para el nuevo schema
+      const transformedData = {
+        user_id: receiptData.user_id,
+        store: receiptData.store,
+        items: receiptData.items.map(item => ({
+          product_name: item.product_name,
+          product_type: item.product_type,
+          quantity: item.quantity
+        }))
+      };
+      
+      const result = await apiService.receipts.confirmReceipt(transformedData);
       return result;
     } catch (err) {
       setError(err);

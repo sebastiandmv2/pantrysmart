@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db import Base, engine
 from app.routers import receipts
 
+# Importar modelos para que SQLAlchemy los registre
+from app.models import Product, UserInventory, InventoryMovement
+
 app = FastAPI(title="PantrySmart API", version="0.1.0")
 
 # Configurar CORS

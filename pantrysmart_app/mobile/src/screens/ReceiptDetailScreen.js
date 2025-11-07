@@ -54,51 +54,76 @@ export default function ReceiptDetailScreen({ route, navigation }) {
     }
   };
 
-  const getCategoryIcon = (category) => {
-    const iconMap = {
-      'Alimentos': 'food-apple',
-      'Bebidas': 'cup-water',
-      'Higiene': 'shower',
-      'Limpieza': 'spray-bottle',
-      'Salud': 'medical-bag',
-      'Mascotas': 'paw',
-      'Hogar': 'home',
-      'Bebé': 'baby-face',
-      'Alcohol': 'bottle-wine',
-      'Otros': 'package-variant',
-    };
-    return iconMap[category] || 'package-variant';
+  const formatTime = (dateStr) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
   };
 
-  const getCategoryColor = (category) => {
+  const getProductTypeIcon = (productType) => {
+    const iconMap = {
+      'Arroz': 'rice',
+      'Fideos': 'noodles',
+      'Leche': 'cup',
+      'Queso': 'cheese',
+      'Yogur': 'cup-outline',
+      'Atun': 'fish',
+      'Pan': 'bread-slice',
+      'Huevo': 'egg',
+      'Azucar': 'cube-outline',
+      'Harina': 'sack',
+      'Aceite': 'bottle-tonic',
+      'Sal': 'shaker-outline',
+      'Mantequilla': 'butter',
+      'Pollo': 'food-drumstick',
+      'Carne molida': 'food-steak',
+      'Manzana': 'apple',
+      'Platano': 'fruit-pineapple',
+      'Cebolla': 'onion',
+      'Tomate': 'tomato',
+      'Ajo': 'garlic',
+      'Zanahoria': 'carrot',
+      'Helado': 'ice-cream',
+      'Otros': 'package-variant',
+    };
+    return iconMap[productType] || 'package-variant';
+  };
+
+  const getProductTypeColor = (productType) => {
+    // Colores basados en categorías de alimentos
     const colorMap = {
-      'Alimentos': '#059669',
-      'Bebidas': '#0ea5e9',
-      'Higiene': '#8b5cf6',
-      'Limpieza': '#06b6d4',
-      'Salud': '#dc2626',
-      'Mascotas': '#d97706',
-      'Hogar': '#4f46e5',
-      'Bebé': '#ec4899',
-      'Alcohol': '#7c2d12',
+      'Arroz': '#059669', 'Fideos': '#059669', 'Harina': '#059669', 'Azucar': '#059669', 'Sal': '#059669', // Abarrotes
+      'Leche': '#0ea5e9', 'Queso': '#0ea5e9', 'Yogur': '#0ea5e9', 'Mantequilla': '#0ea5e9', // Lácteos
+      'Pollo': '#dc2626', 'Carne molida': '#dc2626', 'Atun': '#dc2626', // Carnes
+      'Pan': '#d97706', // Panadería
+      'Manzana': '#10b981', 'Platano': '#10b981', // Frutas
+      'Cebolla': '#16a34a', 'Tomate': '#16a34a', 'Ajo': '#16a34a', 'Zanahoria': '#16a34a', // Verduras
+      'Helado': '#8b5cf6', // Congelados
+      'Aceite': '#f59e0b', 'Huevo': '#f59e0b', // Condimentos/otros
       'Otros': '#6b7280',
     };
-    return colorMap[category] || '#6b7280';
+    return colorMap[productType] || '#6b7280';
   };
 
   const renderItem = ({ item }) => (
     <View style={styles.itemCard}>
       <View style={styles.itemHeader}>
-        <View style={[styles.categoryIcon, { backgroundColor: getCategoryColor(item.category) + '20' }]}>
+        <View style={[styles.productIcon, { backgroundColor: getProductTypeColor(item.product_type) + '20' }]}>
           <MaterialCommunityIcons 
-            name={getCategoryIcon(item.category)} 
+            name={getProductTypeIcon(item.product_type)} 
             size={20} 
-            color={getCategoryColor(item.category)} 
+            color={getProductTypeColor(item.product_type)} 
           />
         </View>
         <View style={styles.itemInfo}>
           <Text style={styles.itemName}>{item.product_name}</Text>
-          <Text style={styles.itemCategory}>{item.category}</Text>
+          <Text style={styles.itemType}>{item.product_type}</Text>
         </View>
       </View>
       
@@ -108,12 +133,10 @@ export default function ReceiptDetailScreen({ route, navigation }) {
           <Text style={styles.detailValue}>{item.quantity}</Text>
         </View>
         <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Precio unitario:</Text>
-          <Text style={styles.detailValue}>${item.unit_price?.toLocaleString()}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Total:</Text>
-          <Text style={[styles.detailValue, styles.totalPrice]}>${item.total_price?.toLocaleString()}</Text>
+          <Text style={styles.detailLabel}>Estado:</Text>
+          <Text style={[styles.detailValue, item.is_active ? styles.activeStatus : styles.inactiveStatus]}>
+            {item.is_active ? 'Activo' : 'Inactivo'}
+          </Text>
         </View>
       </View>
     </View>
@@ -160,8 +183,8 @@ export default function ReceiptDetailScreen({ route, navigation }) {
           <MaterialCommunityIcons name="store" size={24} color="#2f7d36" />
           <Text style={styles.storeName}>{receipt.store}</Text>
         </View>
-        <Text style={styles.receiptDate}>{formatDate(receipt.date)}</Text>
-        <Text style={styles.receiptTime}>{receipt.time}</Text>
+        <Text style={styles.receiptDate}>{formatDate(receipt.created_at)}</Text>
+        <Text style={styles.receiptTime}>{formatTime(receipt.created_at)}</Text>
       </View>
 
       {/* Summary */}
@@ -171,14 +194,14 @@ export default function ReceiptDetailScreen({ route, navigation }) {
           <Text style={styles.summaryValue}>{receipt.items?.length || 0}</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryLabel}>Subtotal:</Text>
-          <Text style={[styles.summaryValue, styles.summaryTotal]}>${receipt.subtotal?.toLocaleString()}</Text>
+          <Text style={styles.summaryLabel}>Productos activos:</Text>
+          <Text style={styles.summaryValue}>{receipt.items?.filter(item => item.is_active).length || 0}</Text>
         </View>
       </View>
 
       {/* Items List */}
       <View style={styles.itemsSection}>
-        <Text style={styles.sectionTitle}>Productos</Text>
+        <Text style={styles.sectionTitle}>Productos de Inventario</Text>
         <FlatList
           data={receipt.items || []}
           renderItem={renderItem}
@@ -289,7 +312,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
   },
-  categoryIcon: {
+  productIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -306,7 +329,7 @@ const styles = StyleSheet.create({
     color: "#111",
     marginBottom: 2,
   },
-  itemCategory: {
+  itemType: {
     fontSize: 12,
     color: "#6b7280",
     fontWeight: "500",
@@ -327,9 +350,13 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     color: "#111",
   },
-  totalPrice: {
+  activeStatus: {
     fontWeight: "600",
     color: "#059669",
+  },
+  inactiveStatus: {
+    fontWeight: "600",
+    color: "#dc2626",
   },
   loadingContainer: {
     flex: 1,

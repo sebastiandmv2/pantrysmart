@@ -11,61 +11,98 @@ router = APIRouter()
 
 DEMO_USER_ID = os.getenv("DEMO_USER_ID", "demo-user")
 
-SYSTEM_MSG = (
-  "Eres un extractor de boletas de supermercado (Chile y LATAM). "
-  "Devuelve SOLO JSON válido que cumpla el esquema.\n\n"
-  "REGLAS:\n"
-  "- Detecta cantidad y precio unitario cuando aparezca un patrón de multiplicación en CUALQUIER ORDEN: "
-  "  '2x1590', '2 x 1.590', '1.590x2', '1.590 x 2', '2X $1,590', etc. "
-  "  Normaliza: quantity=N (entero), unit_price=P (entero sin puntos/$, CLP), total_price=N*P.\n"
-  "- Si no aparece patrón explícito, usa la línea total como total_price e infiere unit_price si hay indicios.\n"
-  "- Montos SIEMPRE como enteros en CLP. Fecha en YYYY-MM-DD. "
-  "Método de pago: TBK CREDITO/DEBITO ⇒ 'Tarjeta de Crédito'/'Tarjeta de Débito'.\n"
-  "- La propiedad 'category' es OBLIGATORIA. Usa solo una de: "
-  "['Alimentos','Bebidas','Higiene','Limpieza','Salud','Mascotas','Hogar','Bebé','Alcohol','Otros'].\n"
-  "- No inventes productos que no se lean. Ignora líneas de lealtad, mensajes, subtotales duplicados."
-  "\n\nDETALLES IMPORTANTES:\n"
-  "- El patrón de cantidad puede estar ANTES o DESPUÉS del producto e incluso en la LÍNEA ANTERIOR. "
-  "  Ejemplos válidos: '2x1.990 HIELO ...', 'HIELO ... 1.990x2', '2 X $1,990', '$1.990 x 2'.\n"
-  "- Si ves el precio TOTAL de la línea pero no el patrón, y el total es divisible por un entero pequeño (2–10), "
-  "  asume quantity=N y unit_price=total/N.\n"
-  "- Asigna SIEMPRE una categoría de este set: "
-  "['Alimentos','Bebidas','Higiene','Limpieza','Salud','Mascotas','Hogar','Bebé','Alcohol','Otros'].\n"
-  "- Ejemplos de mapeo rápido: CONFORT/PAPEL→Higiene; HIELO→Alimentos; BEBIDA/JUGO/AGUA→Bebidas."
-)
+SYSTEM_PROMPT = """Eres un extractor de datos de boletas chilenas. Analiza la imagen y devuelve ÚNICAMENTE JSON válido.
+No inventes datos: si falta algo, usa null (para tienda) o valores por defecto según el esquema.
+Ignora precios, totales y descuentos. Solo queremos nombre/cantidad y su clasificación (Producto, Categoria).
+No incluyas explicaciones fuera del JSON.
+"""
+
+USER_PROMPT = """Tarea: extrae la información de la boleta y devuélvela en este esquema JSON:
+{
+  "tienda": {
+    "nombre": null,
+    "sucursal_o_direccion": null
+  },
+  "items": [
+    {
+      "NombreOriginal": "string",
+      "Cantidad": 1,
+      "Producto": "string",
+      "Categoria": "string",
+      "is_inventario": true
+    }
+  ]
+}
+
+Definiciones:
+- "NombreOriginal": la línea de producto tal como aparece (limpia ruido obvio de OCR/vision si existiera, pero conserva la marca).
+- "Cantidad": si hay patron de multiplicidad (2X..., x6, "6 UN", "PACK 6", "3 x 1.290", etc.), usa esa cantidad. Si no, 1.
+- "Producto": nombre canónico generico en singular. DEBE ser uno de estos tipos EXACTOS:
+  ["Arroz", "Fideos", "Fideo", "Azucar", "Harina", "Aceite", "Sal", "Leche", "Leche evaporada", "Queso", "Yogur", "Mantequilla",
+   "Atun", "Pollo", "Carne molida", "Hamburguesa", "Huevo", "Pan", "Gallina", "Manzana", "Platano", "Fruta", "Berries",
+   "Cebolla", "Tomate", "Ajo", "Zanahoria", "Salsa de tomate", "Sopa", "Ravioles", "Helado", "Otros"].
+  Si no encuentras una coincidencia exacta, usa "Otros". No inventes nuevos tipos.
+- "Categoria": una de las siguientes (elige la mas adecuada):
+  ["Abarrotes","Lacteos","Carnes","Embutidos","Panaderia","Verduras","Frutas","Congelados",
+   "Dulces","Snacks","Condimentos","Bebestibles","Limpieza","CuidadoPersonal","Mascotas","Hogar"]
+- "is_inventario": true si la categoria es de alimentos/preparacion de recetas del dia a dia
+  (Abarrotes,Lacteos,Carnes,Embutidos,Panaderia,Verduras,Frutas,Congelados,Condimentos).
+  false si es Limpieza,CuidadoPersonal,Mascotas,Hogar o Bebestibles (segun criterio de exclusión del inventario de recetas).
+
+Reglas:
+1) Recorre la boleta de arriba hacia abajo; cada item corresponde a una linea de producto (ignora totales, subtotales, formas de pago).
+2) "NombreOriginal": conserva marca y descripcion; no mezcles con lineas de descuento/promos.
+3) "Cantidad": detecta patrones como 2X, 3 x 1.290, x6, "6 UN/UNI", "PACK 6", etc.; si no hay multiplicidad, usa 1.
+4) "Producto": canónico generico en singular (sin marca, sin peso/volumen/sabor). DEBE ser uno de los tipos válidos de la lista. Si no hay coincidencia exacta, usa "Otros".
+5) "Categoria": elige la mas pertinente de la lista.
+6) "is_inventario": asigna segun la regla explicada arriba.
+7) Salida: ÚNICAMENTE el JSON con el esquema.
+8) IMPORTANTE: Solo usa tipos de "Producto" de la lista proporcionada. No inventes nuevos tipos.
+
+Importante:
+- Ignora precios, totales y descuentos.
+- No incluyas markdown ni comentarios, solo el JSON.
+"""
 
 RECEIPT_SCHEMA = {
-    "name": "receipt_schema",
+    "name": "boleta_schema_v2",
+    "strict": True,
     "schema": {
         "type": "object",
         "properties": {
-            "store": {"type": "string"},
-            "date": {"type": "string", "description": "YYYY-MM-DD"},
-            "time": {"type": "string"},
+            "tienda": {
+                "type": "object",
+                "properties": {
+                    "nombre": {"type": ["string", "null"]},
+                    "sucursal_o_direccion": {"type": ["string", "null"]}
+                },
+                "required": ["nombre", "sucursal_o_direccion"],
+                "additionalProperties": False
+            },
             "items": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "product_name": {"type": "string"},
-                        "category": {
+                        "NombreOriginal": {"type": "string"},
+                        "Cantidad": {"type": "integer", "minimum": 1},
+                        "Producto": {"type": "string"},
+                        "Categoria": {
                             "type": "string",
-                            "description": "Una de: Alimentos, Bebidas, Higiene, Limpieza, Salud, Mascotas, Hogar, Bebé, Alcohol, Otros"
+                            "enum": [
+                                "Abarrotes","Lacteos","Carnes","Embutidos","Panaderia","Verduras","Frutas",
+                                "Congelados","Dulces","Snacks","Condimentos","Bebestibles","Limpieza",
+                                "CuidadoPersonal","Mascotas","Hogar"
+                            ]
                         },
-                        "quantity": {"type": "integer"},
-                        "unit_price": {"type": "integer"},
-                        "total_price": {"type": "integer"}
+                        "is_inventario": {"type": "boolean"}
                     },
-                    "required": ["product_name", "category", "quantity", "unit_price", "total_price"],
+                    "required": ["NombreOriginal","Cantidad","Producto","Categoria","is_inventario"],
                     "additionalProperties": False
                 }
-            },
-            "subtotal": {"type": "integer"},
-            "iva": {"type": "integer"},
-            "total": {"type": "integer"},
-            "payment_method": {"type": "string"}
+            }
         },
-        "required": ["store", "date", "time", "items", "subtotal", "iva", "total"],
+        "required": ["tienda", "items"],
         "additionalProperties": False
     }
 }
@@ -97,6 +134,7 @@ async def debug_upload(file: UploadFile = File(...)):
 
 @router.post("/receipts/extract-receipt", tags=["receipts"])
 async def extract_receipt(file: UploadFile = File(...)):
+    from app.schemas import PRODUCT_TYPES
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Se requiere una imagen (content-type image/*).")
 
@@ -110,18 +148,22 @@ async def extract_receipt(file: UploadFile = File(...)):
     image_bytes = await file.read()
     image_b64 = _b64(image_bytes)
 
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": USER_PROMPT},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
+            ]
+        }
+    ]
+
     try:
         resp = client.chat.completions.create(
             model=model,
             temperature=0,
-            messages=[
-                {"role": "system", "content": SYSTEM_MSG},
-                {"role": "user", "content": [
-                    {"type": "text", "text": "Extrae la boleta como JSON, siguiendo las reglas."},
-                    {"type": "image_url",
-                     "image_url": {"url": f"data:{file.content_type};base64,{image_b64}"}}
-                ]}
-            ],
+            messages=messages,
             response_format={"type": "json_schema", "json_schema": RECEIPT_SCHEMA}
         )
     except Exception as e:
@@ -133,29 +175,73 @@ async def extract_receipt(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(status_code=500, detail="No se pudo parsear la respuesta JSON del modelo.")
 
-    # Remover campos no deseados al final
-    for k in ["iva", "total", "payment_method"]:
-        data.pop(k, None)
-
-    return data
+    # Mapeo de tipos similares a tipos válidos
+    TYPE_MAPPING = {
+        'Pasta': 'Fideos',
+        'Noodles': 'Fideos', 
+        'Espagueti': 'Fideos',
+        'Tallarines': 'Fideos',
+        'Leche condensada': 'Leche evaporada',
+        'Carne': 'Carne molida',
+        'Beef': 'Carne molida',
+        'Chicken': 'Pollo',
+        'Tuna': 'Atun',
+        'Bread': 'Pan',
+        'Milk': 'Leche',
+        'Cheese': 'Queso',
+        'Sugar': 'Azucar',
+        'Rice': 'Arroz',
+        'Egg': 'Huevo',
+        'Eggs': 'Huevo',
+        'Apple': 'Manzana',
+        'Banana': 'Platano',
+        'Onion': 'Cebolla',
+        'Tomato': 'Tomate',
+        'Garlic': 'Ajo',
+        'Carrot': 'Zanahoria',
+        'Galletas': 'Otros',
+        'Cereales': 'Otros',
+        'Bebida': 'Otros'
+    }
+    
+    # Filtrar solo items de inventario y transformar estructura
+    inventory_items = []
+    for item in data.get("items", []):
+        if item.get("is_inventario", False):
+            product_type = item["Producto"]
+            # Mapear tipos similares si es necesario
+            if product_type in TYPE_MAPPING:
+                product_type = TYPE_MAPPING[product_type]
+            # Si aún no es válido, usar "Otros"
+            elif product_type not in PRODUCT_TYPES:
+                product_type = "Otros"
+                
+            inventory_items.append({
+                "product_name": item["NombreOriginal"],
+                "product_type": product_type,
+                "quantity": item["Cantidad"]
+            })
+    
+    return {
+        "store": data.get("tienda", {}).get("sucursal_o_direccion"),
+        "items": inventory_items
+    }
 
 @router.post("/receipts/confirm", response_model=ReceiptOut, tags=["receipts"])
 def confirm_receipt(payload: ReceiptConfirmIn, db: Session = Depends(get_db)):
-    # Validación mínima de categorías
-    allowed = ['Alimentos','Bebidas','Higiene','Limpieza','Salud','Mascotas','Hogar','Bebé','Alcohol','Otros']
+    from app.schemas import PRODUCT_TYPES
+    
+    # Validación de tipos de producto
     for it in payload.items:
-        if it.category not in allowed:
-            raise HTTPException(status_code=400, detail=f"Invalid category: {it.category}")
+        if it.product_type not in PRODUCT_TYPES:
+            raise HTTPException(status_code=400, detail=f"Invalid product_type: {it.product_type}")
 
-    user_id = payload.user_id or DEMO_USER_ID   # <<< fallback aquí
+    user_id = payload.user_id or DEMO_USER_ID
 
     # Crear receipt
     r = Receipt(
         user_id=user_id,
         store=payload.store,
-        date=payload.date,
-        time=payload.time,
-        subtotal=payload.subtotal,
     )
     db.add(r)
     db.flush()  # obtiene r.id
@@ -165,10 +251,8 @@ def confirm_receipt(payload: ReceiptConfirmIn, db: Session = Depends(get_db)):
         db.add(ReceiptItem(
             receipt_id=r.id,
             product_name=it.product_name,
-            category=it.category,
+            product_type=it.product_type,
             quantity=it.quantity,
-            unit_price=it.unit_price,
-            total_price=it.total_price,
         ))
 
     db.commit()

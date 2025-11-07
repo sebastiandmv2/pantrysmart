@@ -1,5 +1,5 @@
 # Dockerfile para React Native con Expo
-FROM node:18-alpine
+FROM node:20-alpine
 
 # Instalar dependencias del sistema
 RUN apk add --no-cache git
@@ -10,11 +10,12 @@ RUN npm install -g @expo/cli
 # Crear directorio de trabajo
 WORKDIR /app
 
-# Copiar package.json y package-lock.json
-COPY package*.json ./
+# Copiar package.json
+COPY package.json ./
 
-# Instalar dependencias
-RUN npm install
+# Limpiar caché de npm e instalar dependencias
+RUN npm cache clean --force && \
+    npm install --no-package-lock
 
 # Copiar el resto del código
 COPY . .

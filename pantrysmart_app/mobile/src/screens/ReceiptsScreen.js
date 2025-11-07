@@ -63,6 +63,18 @@ export default function ReceiptsScreen({ navigation }) {
     }
   };
 
+  const formatTime = (dateStr) => {
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleTimeString('es-CL', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '';
+    }
+  };
+
   const getTotalItems = (receipt) => {
     return receipt.items?.length || 0;
   };
@@ -77,7 +89,7 @@ export default function ReceiptsScreen({ navigation }) {
           <MaterialCommunityIcons name="store" size={20} color="#2f7d36" />
           <Text style={styles.storeName}>{receipt.store}</Text>
         </View>
-        <Text style={styles.receiptDate}>{formatDate(receipt.date)}</Text>
+        <Text style={styles.receiptDate}>{formatDate(receipt.created_at)}</Text>
       </View>
 
       <View style={styles.receiptStats}>
@@ -86,13 +98,13 @@ export default function ReceiptsScreen({ navigation }) {
           <Text style={styles.statText}>{getTotalItems(receipt)} productos</Text>
         </View>
         <View style={styles.statItem}>
-          <MaterialCommunityIcons name="currency-usd" size={16} color="#6b7280" />
-          <Text style={styles.statText}>${receipt.subtotal?.toLocaleString() || '0'}</Text>
+          <MaterialCommunityIcons name="clock-outline" size={16} color="#6b7280" />
+          <Text style={styles.statText}>{formatTime(receipt.created_at)}</Text>
         </View>
       </View>
 
       <View style={styles.receiptFooter}>
-        <Text style={styles.receiptTime}>{receipt.time}</Text>
+        <Text style={styles.receiptTime}>{receipt.store || 'Tienda no especificada'}</Text>
         <MaterialCommunityIcons name="chevron-right" size={20} color="#9ca3af" />
       </View>
     </TouchableOpacity>

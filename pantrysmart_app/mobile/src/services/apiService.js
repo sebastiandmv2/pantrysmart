@@ -44,7 +44,13 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (config.DEV_MODE) {
-      console.error('API Error:', error.response?.status, error.config?.url);
+      console.error('API Error Details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        url: error.config?.url,
+        message: error.message,
+        code: error.code
+      });
     }
     return Promise.reject(error);
   }
@@ -52,13 +58,50 @@ apiClient.interceptors.response.use(
 
 // Servicios de la API
 export const apiService = {
-  // Health check
+  // Health check con reintentos para túneles lentos
   healthCheck: async () => {
-    try {
-      const response = await apiClient.get('/');
-      return response.data;
-    } catch (error) {
-      throw error;
+    const maxRetries = 3;
+    const retryDelay = 3000; // 3 segundos entre reintentos
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🏥 Verificando salud del servidor (intento ${attempt}/${maxRetries}):`, config.API_URL);
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), config.HEALTH_CHECK_TIMEOUT || 15000);
+        
+        const response = await fetch(`${config.API_URL}/health`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('🏥 Health check response:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          throw new Error(`Health check failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Servidor saludable:', data);
+        return data;
+        
+      } catch (error) {
+        console.error(`❌ Health check intento ${attempt} falló:`, error.message);
+        
+        // Si es el último intento, lanzar el error
+        if (attempt === maxRetries) {
+          throw error;
+        }
+        
+        // Esperar antes del siguiente intento
+        console.log(`⏳ Esperando ${retryDelay/1000}s antes del siguiente intento...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      }
     }
   },
 
@@ -135,20 +178,60 @@ export const apiService = {
     
     // Confirmar y guardar la boleta procesada
     confirmReceipt: async (receiptData) => {
-      const response = await apiClient.post('/receipts/confirm', receiptData);
-      return response.data;
+      const response = await fetch(`${config.API_URL}/receipts/confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(receiptData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Confirm API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
     },
     
     // Obtener boleta por ID
     getById: async (id) => {
-      const response = await apiClient.get(`/receipts/${id}`);
-      return response.data;
+      const response = await fetch(`${config.API_URL}/receipts/${id}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('GetById API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
     },
     
     // Obtener boletas por usuario
     getByUser: async (userId) => {
-      const response = await apiClient.get(`/receipts/user/${userId}`);
-      return response.data;
+      const response = await fetch(`${config.API_URL}/receipts/user/${userId}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('GetByUser API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
     },
   },
 

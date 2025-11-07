@@ -14,6 +14,7 @@ import ScanScreen from "../screens/ScanScreen";
 import ReviewScreen from "../screens/ReviewScreen";
 import ReceiptsScreen from "../screens/ReceiptsScreen";
 import ReceiptDetailScreen from "../screens/ReceiptDetailScreen";
+import ReceiptConfirmScreen from "../screens/ReceiptConfirmScreen";
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -139,6 +140,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Scan" component={ScanScreen} options={{ title: "Escanear boleta" }} />
       <Stack.Screen name="Review" component={ReviewScreen} options={{ title: "Revisar productos" }} />
       <Stack.Screen name="List" component={ListScreen} options={{ title: "Lista de compras" }} />
+      <Stack.Screen name="ReceiptConfirm" component={ReceiptConfirmScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReceiptDetail" component={ReceiptDetailScreen} options={{ headerShown: false }} />
     </Stack.Navigator>
   );
