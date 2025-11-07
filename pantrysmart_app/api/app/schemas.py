@@ -52,6 +52,8 @@ class ReceiptOut(BaseModel):
     store: Optional[str]
     items: List[ReceiptItemOut]
     created_at: datetime
+    inventory_items_added: Optional[int] = None  # Cantidad de items agregados al inventario
+    
     class Config:
         from_attributes = True
 

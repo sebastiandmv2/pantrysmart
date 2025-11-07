@@ -346,17 +346,57 @@ def process_receipt_items_to_inventory(
     from app.schemas import PRODUCT_TYPES
     from app.models import ProductCategory
     
-    # Mapeo de tipos de productos a categorías (simplificado)
+    # Mapeo completo de tipos de productos a categorías
     TYPE_TO_CATEGORY = {
+        # Abarrotes básicos
         'Arroz': ProductCategory.ABARROTES,
         'Fideos': ProductCategory.ABARROTES,
+        'Fideo': ProductCategory.ABARROTES,
+        'Azucar': ProductCategory.ABARROTES,
+        'Harina': ProductCategory.ABARROTES,
+        'Sopa': ProductCategory.ABARROTES,
+        'Ravioles': ProductCategory.ABARROTES,
+        
+        # Lácteos
         'Leche': ProductCategory.LACTEOS,
+        'Leche evaporada': ProductCategory.LACTEOS,
         'Queso': ProductCategory.LACTEOS,
+        'Yogur': ProductCategory.LACTEOS,
+        'Mantequilla': ProductCategory.LACTEOS,
+        'Huevo': ProductCategory.LACTEOS,
+        
+        # Carnes y proteínas
+        'Atun': ProductCategory.CARNES,
         'Pollo': ProductCategory.CARNES,
+        'Carne molida': ProductCategory.CARNES,
+        'Hamburguesa': ProductCategory.CARNES,
+        'Gallina': ProductCategory.CARNES,
+        
+        # Panadería
         'Pan': ProductCategory.PANADERIA,
+        
+        # Frutas
         'Manzana': ProductCategory.FRUTAS,
+        'Platano': ProductCategory.FRUTAS,
+        'Fruta': ProductCategory.FRUTAS,
+        'Berries': ProductCategory.FRUTAS,
+        
+        # Verduras
         'Cebolla': ProductCategory.VERDURAS,
-        # ... agregar más mapeos según sea necesario
+        'Tomate': ProductCategory.VERDURAS,
+        'Ajo': ProductCategory.VERDURAS,
+        'Zanahoria': ProductCategory.VERDURAS,
+        
+        # Condimentos y salsas
+        'Aceite': ProductCategory.CONDIMENTOS,
+        'Sal': ProductCategory.CONDIMENTOS,
+        'Salsa de tomate': ProductCategory.CONDIMENTOS,
+        
+        # Congelados
+        'Helado': ProductCategory.CONGELADOS,
+        
+        # Otros
+        'Otros': ProductCategory.ABARROTES,
     }
     
     results = []
@@ -370,20 +410,47 @@ def process_receipt_items_to_inventory(
         # Determinar categoría
         category = TYPE_TO_CATEGORY.get(product_type, ProductCategory.ABARROTES)
         
-        # Agregar al inventario
-        inventory_item, movement = add_to_inventory(
-            db=db,
-            user_id=user_id,
-            product_name=product_name,
-            category=category,
-            quantity=quantity,
-            purchase_date=purchase_date,
-            store_purchased=store_name,
-            movement_type=MovementType.ADDED_RECEIPT,
-            reference_id=str(receipt_id) if receipt_id else None,
-            reference_type="receipt"
-        )
-        
-        results.append((inventory_item, movement))
+        try:
+            # Verificar si el producto ya existe en el inventario del usuario
+            existing_inventory = db.query(UserInventory).join(Product).filter(
+                UserInventory.user_id == user_id,
+                Product.name.ilike(f"%{product_name.strip()}%")
+            ).first()
+            
+            if existing_inventory:
+                # Si existe, agregar a la cantidad existente
+                logger.info(f"Producto existente encontrado: {product_name}, agregando {quantity}")
+                movement = add_inventory_movement(
+                    db=db,
+                    user_id=user_id,
+                    product=existing_inventory.product,
+                    inventory_item=existing_inventory,
+                    movement_type=MovementType.ADDED_RECEIPT,
+                    quantity_change=quantity,
+                    reason=f"Agregado desde boleta: {quantity} unidades",
+                    reference_id=str(receipt_id) if receipt_id else None,
+                    reference_type="receipt"
+                )
+                results.append((existing_inventory, movement))
+            else:
+                # Si no existe, crear nuevo item
+                inventory_item, movement = add_to_inventory(
+                    db=db,
+                    user_id=user_id,
+                    product_name=product_name,
+                    category=category,
+                    quantity=quantity,
+                    purchase_date=purchase_date,
+                    store_purchased=store_name,
+                    movement_type=MovementType.ADDED_RECEIPT,
+                    reference_id=str(receipt_id) if receipt_id else None,
+                    reference_type="receipt"
+                )
+                results.append((inventory_item, movement))
+                
+        except Exception as e:
+            logger.error(f"Error procesando item {product_name}: {e}")
+            # Continuar con el siguiente item en caso de error
+            continue
     
     return results

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db import Base, engine
-from app.routers import receipts
+from app.routers import receipts, inventory
 
 # Importar modelos para que SQLAlchemy los registre
 from app.models import Product, UserInventory, InventoryMovement
@@ -21,6 +21,7 @@ Base.metadata.create_all(bind=engine)
 
 # Rutas
 app.include_router(receipts.router)
+app.include_router(inventory.router)
 
 @app.get("/health")
 def health():

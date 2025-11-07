@@ -209,12 +209,73 @@ export PYTHONPATH="${PYTHONPATH}:/path/to/pantrysmart_app/api"
 cat .env | grep DATABASE_URL
 ```
 
-## 📝 Próximos Pasos
+## 📝 Estado del Desarrollo
 
 1. ✅ **Completado**: Modelos y configuración base
-2. 🔄 **Siguiente**: Crear endpoints de API para inventario
-3. 🔄 **Siguiente**: Integrar con frontend móvil
-4. 🔄 **Siguiente**: Conectar con flujo de boletas existente
+2. ✅ **Completado**: Endpoints de API para inventario
+3. ✅ **Completado**: Integración con flujo de boletas
+4. 🔄 **Siguiente**: Integrar con frontend móvil
+5. 🔄 **Siguiente**: Actualizar HomeScreen con datos reales
+
+## 🔗 Integración con Boletas
+
+### Flujo Automático
+Cuando se confirma una boleta escaneada:
+
+1. **Extracción**: IA extrae productos de la imagen
+2. **Confirmación**: Usuario revisa y confirma productos
+3. **Guardado**: Se guarda la boleta en `receipts` table
+4. **Inventario**: Se agregan automáticamente al inventario personal
+5. **Historial**: Se registran movimientos de inventario
+
+### Lógica de Productos Duplicados
+- Si el producto ya existe → se suma a la cantidad existente
+- Si es producto nuevo → se crea nuevo item de inventario
+- Se mantiene historial completo de movimientos
+
+## 🌐 Nuevos Endpoints de API
+
+### Inventario
+- `GET /inventory/user/{user_id}/summary` - Resumen del inventario
+- `GET /inventory/user/{user_id}/items` - Lista de productos
+- `GET /inventory/user/{user_id}/low-stock` - Productos con stock bajo
+- `POST /inventory/user/{user_id}/add-item` - Agregar producto manual
+- `PUT /inventory/items/{item_id}` - Actualizar producto
+- `POST /inventory/items/{item_id}/consume` - Consumir producto
+
+### Productos
+- `GET /inventory/products/search?q=arroz` - Buscar productos
+- `GET /inventory/products/categories` - Categorías disponibles
+- `GET /inventory/products/by-category/{category}` - Productos por categoría
+
+### Demo/Testing
+- `GET /inventory/demo/summary` - Resumen inventario demo
+- `POST /inventory/demo/add-sample-data` - Agregar datos de muestra
+
+## 🧪 Testing
+
+### Ejecutar Tests de Integración
+```bash
+cd pantrysmart_app/api
+python test_inventory_integration.py
+```
+
+Este script verifica:
+- ✅ Creación de boletas
+- ✅ Procesamiento automático al inventario  
+- ✅ Manejo de productos duplicados
+- ✅ Historial de movimientos
+- ✅ Endpoints de API
+
+### Agregar Datos de Muestra
+```bash
+curl -X POST http://localhost:8000/inventory/demo/add-sample-data
+```
+
+### Verificar Inventario Demo
+```bash
+curl http://localhost:8000/inventory/demo/summary
+```
 
 ## 📚 Referencias
 

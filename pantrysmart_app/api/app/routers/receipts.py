@@ -230,6 +230,10 @@ async def extract_receipt(file: UploadFile = File(...)):
 @router.post("/receipts/confirm", response_model=ReceiptOut, tags=["receipts"])
 def confirm_receipt(payload: ReceiptConfirmIn, db: Session = Depends(get_db)):
     from app.schemas import PRODUCT_TYPES
+    from app.inventory_utils import process_receipt_items_to_inventory
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     # Validación de tipos de producto
     for it in payload.items:
@@ -238,26 +242,58 @@ def confirm_receipt(payload: ReceiptConfirmIn, db: Session = Depends(get_db)):
 
     user_id = payload.user_id or DEMO_USER_ID
 
-    # Crear receipt
-    r = Receipt(
-        user_id=user_id,
-        store=payload.store,
-    )
-    db.add(r)
-    db.flush()  # obtiene r.id
+    try:
+        # Crear receipt
+        r = Receipt(
+            user_id=user_id,
+            store=payload.store,
+        )
+        db.add(r)
+        db.flush()  # obtiene r.id
 
-    # Crear items
-    for it in payload.items:
-        db.add(ReceiptItem(
-            receipt_id=r.id,
-            product_name=it.product_name,
-            product_type=it.product_type,
-            quantity=it.quantity,
-        ))
+        # Crear items de la boleta
+        receipt_items_data = []
+        for it in payload.items:
+            receipt_item = ReceiptItem(
+                receipt_id=r.id,
+                product_name=it.product_name,
+                product_type=it.product_type,
+                quantity=it.quantity,
+            )
+            db.add(receipt_item)
+            
+            # Preparar datos para inventario
+            receipt_items_data.append({
+                'product_name': it.product_name,
+                'product_type': it.product_type,
+                'quantity': it.quantity
+            })
 
-    db.commit()
-    db.refresh(r)
-    return r
+        # Procesar items al inventario
+        logger.info(f"Procesando {len(receipt_items_data)} items al inventario para usuario {user_id}")
+        
+        inventory_results = process_receipt_items_to_inventory(
+            db=db,
+            user_id=user_id,
+            receipt_items=receipt_items_data,
+            store_name=payload.store,
+            receipt_id=r.id
+        )
+        
+        logger.info(f"Agregados {len(inventory_results)} productos al inventario")
+
+        db.commit()
+        db.refresh(r)
+        
+        # Agregar información de inventario a la respuesta
+        r.inventory_items_added = len(inventory_results)
+        
+        return r
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error procesando boleta: {e}")
+        raise HTTPException(status_code=500, detail=f"Error procesando boleta: {str(e)}")
 
 @router.get("/receipts/{receipt_id}", response_model=ReceiptOut, tags=["receipts"])
 def get_receipt(receipt_id: int, db: Session = Depends(get_db)):
