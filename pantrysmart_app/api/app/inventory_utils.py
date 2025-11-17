@@ -24,31 +24,31 @@ def find_or_create_product(
     barcode: Optional[str] = None
 ) -> Product:
     """
-    Busca un producto por nombre o lo crea si no existe
+    Busca un producto genérico por nombre exacto o lo crea si no existe
     """
-    # Buscar producto existente (case insensitive)
+    # Buscar producto existente por nombre exacto (para productos genéricos)
     existing_product = db.query(Product).filter(
-        Product.name.ilike(f"%{product_name.strip()}%")
+        Product.name == product_name.strip()
     ).first()
     
     if existing_product:
         return existing_product
     
-    # Crear nuevo producto
+    # Crear nuevo producto genérico simplificado
     new_product = Product(
         name=product_name.strip(),
         category=category,
-        description=description or f"Producto {product_name}",
-        default_unit=get_default_unit(category),
-        barcode=barcode,
-        is_perishable=is_perishable_category(category),
-        typical_shelf_life_days=get_default_shelf_life(category)
+        description=f"Producto genérico: {product_name}",
+        default_unit="unidades",  # Unidad por defecto simplificada
+        barcode=None,  # No necesitamos códigos de barras para productos genéricos
+        is_perishable=False,  # Simplificado: no manejar fechas de vencimiento
+        typical_shelf_life_days=None  # No necesario para inventario simplificado
     )
     
     db.add(new_product)
     db.flush()  # Para obtener el ID
     
-    logger.info(f"Producto creado: {product_name} (ID: {new_product.id})")
+    logger.info(f"Producto genérico creado: {product_name} (ID: {new_product.id})")
     return new_product
 
 def get_or_create_inventory_item(
@@ -63,7 +63,7 @@ def get_or_create_inventory_item(
     purchase_price: Optional[float] = None
 ) -> UserInventory:
     """
-    Obtiene el item de inventario del usuario o lo crea si no existe
+    Obtiene el item de inventario del usuario o lo crea si no existe (versión simplificada)
     """
     # Buscar item existente
     inventory_item = db.query(UserInventory).filter(
@@ -74,28 +74,25 @@ def get_or_create_inventory_item(
     if inventory_item:
         return inventory_item
     
-    # Calcular fecha de vencimiento si no se proporciona
-    if not expiration_date and product.is_perishable and product.typical_shelf_life_days:
-        base_date = purchase_date or datetime.utcnow()
-        expiration_date = base_date + timedelta(days=product.typical_shelf_life_days)
-    
-    # Crear nuevo item de inventario
+    # Crear nuevo item de inventario simplificado (sin fechas ni precios)
     inventory_item = UserInventory(
         user_id=user_id,
         product_id=product.id,
         current_quantity=initial_quantity,
-        unit=unit or product.default_unit,
-        stock_level=get_stock_level(initial_quantity),
-        purchase_date=purchase_date,
-        expiration_date=expiration_date,
-        purchase_price=purchase_price,
-        store_purchased=store_purchased
+        unit=unit or "unidades",
+        stock_level=StockLevel.MEDIO,  # Nivel por defecto simplificado
+        purchase_date=None,  # No manejar fechas de compra
+        expiration_date=None,  # No manejar fechas de vencimiento
+        purchase_price=None,  # No manejar precios
+        store_purchased=None,  # No manejar tiendas
+        min_stock_alert=1.0,  # Alerta mínima por defecto
+        auto_consume=True
     )
     
     db.add(inventory_item)
     db.flush()
     
-    logger.info(f"Item de inventario creado: {product.name} para usuario {user_id}")
+    logger.info(f"Item de inventario simplificado creado: {product.name} para usuario {user_id}")
     return inventory_item
 
 # ===============================
@@ -166,24 +163,20 @@ def add_to_inventory(
     reference_type: Optional[str] = None
 ) -> Tuple[UserInventory, InventoryMovement]:
     """
-    Agrega cantidad a un producto en el inventario
+    Agrega cantidad a un producto genérico en el inventario (versión simplificada)
     """
-    # Buscar o crear producto
+    # Buscar o crear producto genérico
     product = find_or_create_product(db, product_name, category)
     
-    # Obtener o crear item de inventario
+    # Obtener o crear item de inventario simplificado
     inventory_item = get_or_create_inventory_item(
         db=db,
         user_id=user_id,
         product=product,
-        unit=unit,
-        purchase_date=purchase_date,
-        expiration_date=expiration_date,
-        store_purchased=store_purchased,
-        purchase_price=purchase_price
+        unit=unit or "unidades"
     )
     
-    # Registrar movimiento
+    # Registrar movimiento simplificado
     movement = add_inventory_movement(
         db=db,
         user_id=user_id,
@@ -193,8 +186,7 @@ def add_to_inventory(
         quantity_change=quantity,
         reason=f"Agregado {quantity} {unit or 'unidades'} de {product_name}",
         reference_id=reference_id,
-        reference_type=reference_type,
-        cost_per_unit=purchase_price
+        reference_type=reference_type
     )
     
     return inventory_item, movement
@@ -246,51 +238,91 @@ def consume_from_inventory(
 
 def get_user_inventory_summary(db: Session, user_id: str) -> Dict:
     """
-    Obtiene un resumen del inventario del usuario
+    Obtiene un resumen del inventario del usuario - Versión simplificada y robusta
     """
-    inventory_items = db.query(UserInventory).filter(
-        UserInventory.user_id == user_id
-    ).all()
+    logger.info(f"Iniciando get_user_inventory_summary para usuario: {user_id}")
     
-    total_products = len(inventory_items)
-    low_stock_products = len([item for item in inventory_items if item.stock_level in [StockLevel.BAJO, StockLevel.AGOTADO]])
-    
-    # Productos próximos a vencer (en los próximos 3 días)
-    soon_expiry = datetime.utcnow() + timedelta(days=3)
-    expired_soon_products = len([
-        item for item in inventory_items 
-        if item.expiration_date and item.expiration_date <= soon_expiry
-    ])
-    
-    # Resumen por categoría
-    categories_summary = {}
-    for item in inventory_items:
-        category = item.product.category
-        if category not in categories_summary:
-            categories_summary[category] = {
+    try:
+        # Paso 1: Verificar que el usuario existe en la tabla
+        logger.info("Paso 1: Contando items de inventario...")
+        total_products = db.query(UserInventory).filter(UserInventory.user_id == user_id).count()
+        logger.info(f"Total productos encontrados: {total_products}")
+        
+        if total_products == 0:
+            logger.info("No hay productos para este usuario, retornando resumen vacío")
+            return {
                 "total_products": 0,
-                "total_quantity": 0.0,
-                "low_stock_count": 0,
-                "expired_soon_count": 0
+                "total_categories": 0,
+                "low_stock_products": 0,
+                "expired_soon_products": 0,
+                "categories": {},
+                "last_updated": datetime.utcnow()
             }
         
-        categories_summary[category]["total_products"] += 1
-        categories_summary[category]["total_quantity"] += item.current_quantity
+        # Paso 2: Contar productos con stock bajo (sin JOIN)
+        logger.info("Paso 2: Contando productos con stock bajo...")
+        low_stock_products = db.query(UserInventory).filter(
+            UserInventory.user_id == user_id,
+            UserInventory.stock_level.in_([StockLevel.BAJO, StockLevel.AGOTADO])
+        ).count()
+        logger.info(f"Productos con stock bajo: {low_stock_products}")
         
-        if item.stock_level in [StockLevel.BAJO, StockLevel.AGOTADO]:
-            categories_summary[category]["low_stock_count"] += 1
+        # Paso 3: Contar productos próximos a vencer
+        logger.info("Paso 3: Contando productos próximos a vencer...")
+        soon_expiry = datetime.utcnow() + timedelta(days=3)
+        expired_soon_products = db.query(UserInventory).filter(
+            UserInventory.user_id == user_id,
+            UserInventory.expiration_date <= soon_expiry,
+            UserInventory.expiration_date >= datetime.utcnow()
+        ).count()
+        logger.info(f"Productos próximos a vencer: {expired_soon_products}")
+        
+        # Paso 4: Obtener categorías únicas (con JOIN pero más simple)
+        logger.info("Paso 4: Obteniendo categorías...")
+        try:
+            # Query más simple para obtener categorías
+            categories_query = db.query(Product.category).join(UserInventory).filter(
+                UserInventory.user_id == user_id
+            ).distinct().all()
             
-        if item.expiration_date and item.expiration_date <= soon_expiry:
-            categories_summary[category]["expired_soon_count"] += 1
-    
-    return {
-        "total_products": total_products,
-        "total_categories": len(categories_summary),
-        "low_stock_products": low_stock_products,
-        "expired_soon_products": expired_soon_products,
-        "categories": categories_summary,
-        "last_updated": datetime.utcnow()
-    }
+            unique_categories = [cat[0] for cat in categories_query]
+            total_categories = len(unique_categories)
+            logger.info(f"Categorías encontradas: {total_categories}")
+            
+        except Exception as e:
+            logger.error(f"Error obteniendo categorías: {e}")
+            total_categories = 0
+            unique_categories = []
+        
+        # Paso 5: Crear resumen básico sin detalles por categoría
+        logger.info("Paso 5: Creando resumen final...")
+        summary = {
+            "total_products": total_products,
+            "total_categories": total_categories,
+            "low_stock_products": low_stock_products,
+            "expired_soon_products": expired_soon_products,
+            "categories": {},  # Temporalmente vacío para evitar errores
+            "last_updated": datetime.utcnow()
+        }
+        
+        logger.info(f"Resumen creado exitosamente: {summary}")
+        return summary
+        
+    except Exception as e:
+        logger.error(f"Error crítico en get_user_inventory_summary: {e}")
+        logger.error(f"Tipo de error: {type(e).__name__}")
+        import traceback
+        logger.error(f"Traceback completo: {traceback.format_exc()}")
+        
+        # Retornar un resumen completamente vacío en caso de error
+        return {
+            "total_products": 0,
+            "total_categories": 0,
+            "low_stock_products": 0,
+            "expired_soon_products": 0,
+            "categories": {},
+            "last_updated": datetime.utcnow()
+        }
 
 def get_products_by_category(db: Session, user_id: str, category: ProductCategory) -> List[UserInventory]:
     """
@@ -341,7 +373,7 @@ def process_receipt_items_to_inventory(
     receipt_id: Optional[int] = None
 ) -> List[Tuple[UserInventory, InventoryMovement]]:
     """
-    Procesa items de una boleta y los agrega al inventario
+    Procesa items de una boleta y los agrega al inventario usando tipos genéricos
     """
     from app.schemas import PRODUCT_TYPES
     from app.models import ProductCategory
@@ -356,6 +388,7 @@ def process_receipt_items_to_inventory(
         'Harina': ProductCategory.ABARROTES,
         'Sopa': ProductCategory.ABARROTES,
         'Ravioles': ProductCategory.ABARROTES,
+        'Pimienta': ProductCategory.CONDIMENTOS,
         
         # Lácteos
         'Leche': ProductCategory.LACTEOS,
@@ -400,26 +433,26 @@ def process_receipt_items_to_inventory(
     }
     
     results = []
-    purchase_date = datetime.utcnow()
     
     for item in receipt_items:
         product_name = item.get('product_name', '')
         product_type = item.get('product_type', 'Otros')
         quantity = float(item.get('quantity', 1))
         
-        # Determinar categoría
+        # CAMBIO CLAVE: Usar el product_type genérico en lugar del product_name específico
+        generic_product_name = product_type  # Esto es "Pimienta", no "PIMIENTA ROJ"
         category = TYPE_TO_CATEGORY.get(product_type, ProductCategory.ABARROTES)
         
         try:
-            # Verificar si el producto ya existe en el inventario del usuario
+            # Buscar si ya existe este tipo genérico de producto en el inventario
             existing_inventory = db.query(UserInventory).join(Product).filter(
                 UserInventory.user_id == user_id,
-                Product.name.ilike(f"%{product_name.strip()}%")
+                Product.name == generic_product_name  # Buscar exactamente por tipo genérico
             ).first()
             
             if existing_inventory:
                 # Si existe, agregar a la cantidad existente
-                logger.info(f"Producto existente encontrado: {product_name}, agregando {quantity}")
+                logger.info(f"Producto genérico existente encontrado: {generic_product_name}, agregando {quantity}")
                 movement = add_inventory_movement(
                     db=db,
                     user_id=user_id,
@@ -427,21 +460,20 @@ def process_receipt_items_to_inventory(
                     inventory_item=existing_inventory,
                     movement_type=MovementType.ADDED_RECEIPT,
                     quantity_change=quantity,
-                    reason=f"Agregado desde boleta: {quantity} unidades",
+                    reason=f"Agregado desde boleta: {quantity} unidades de {generic_product_name}",
                     reference_id=str(receipt_id) if receipt_id else None,
                     reference_type="receipt"
                 )
                 results.append((existing_inventory, movement))
             else:
-                # Si no existe, crear nuevo item
+                # Si no existe, crear nuevo item con nombre genérico
                 inventory_item, movement = add_to_inventory(
                     db=db,
                     user_id=user_id,
-                    product_name=product_name,
+                    product_name=generic_product_name,  # Usar nombre genérico
                     category=category,
                     quantity=quantity,
-                    purchase_date=purchase_date,
-                    store_purchased=store_name,
+                    unit="unidades",  # Unidad por defecto simplificada
                     movement_type=MovementType.ADDED_RECEIPT,
                     reference_id=str(receipt_id) if receipt_id else None,
                     reference_type="receipt"
@@ -449,8 +481,177 @@ def process_receipt_items_to_inventory(
                 results.append((inventory_item, movement))
                 
         except Exception as e:
-            logger.error(f"Error procesando item {product_name}: {e}")
+            logger.error(f"Error procesando item {generic_product_name}: {e}")
             # Continuar con el siguiente item en caso de error
             continue
     
     return results
+
+# ===============================
+# FUNCIONES DE AGRUPACIÓN POR PRODUCTO GENÉRICO
+# ===============================
+
+def get_user_inventory_grouped_by_product_type(db: Session, user_id: str) -> List[Dict]:
+    """
+    Obtiene el inventario simplificado por tipo de producto genérico
+    Solo muestra: nombre genérico, categoría, cantidad total y unidad
+    """
+    try:
+        # Obtener todos los items del inventario con productos
+        inventory_items = db.query(UserInventory).join(Product).filter(
+            UserInventory.user_id == user_id
+        ).all()
+        
+        # Agrupar por tipo de producto genérico
+        grouped_products = {}
+        
+        for item in inventory_items:
+            # Ya que ahora guardamos productos genéricos, usar el nombre directamente
+            product_type = item.product.name  # Esto ya debería ser genérico como "Pimienta"
+            
+            if product_type not in grouped_products:
+                grouped_products[product_type] = {
+                    "product_type": product_type,
+                    "category": item.product.category.value,  # Convertir enum a string
+                    "total_quantity": 0.0,
+                    "unit": item.unit,
+                    "items_count": 1  # Simplificado: siempre 1 porque son productos genéricos
+                }
+            
+            # Agregar cantidad al grupo
+            grouped_products[product_type]["total_quantity"] += item.current_quantity
+        
+        # Convertir a lista y ordenar por nombre
+        result = list(grouped_products.values())
+        result.sort(key=lambda x: x["product_type"])
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en get_user_inventory_grouped_by_product_type: {e}")
+        return []
+
+def extract_generic_product_type(product_name: str) -> str:
+    """
+    Extrae el tipo genérico de un nombre de producto específico
+    Ejemplos:
+    - "Lechuga Iceberg" -> "Lechuga"
+    - "Arroz Grado 1 1kg" -> "Arroz"
+    - "Leche Entera Soprole 1L" -> "Leche"
+    """
+    # Diccionario de palabras clave para identificar tipos genéricos
+    generic_types = {
+        # Lácteos
+        'leche': 'Leche',
+        'queso': 'Queso', 
+        'yogur': 'Yogur',
+        'yogurt': 'Yogur',
+        'mantequilla': 'Mantequilla',
+        'huevo': 'Huevo',
+        
+        # Carnes
+        'pollo': 'Pollo',
+        'carne': 'Carne',
+        'atun': 'Atún',
+        'salmon': 'Salmón',
+        'cerdo': 'Cerdo',
+        
+        # Verduras
+        'lechuga': 'Lechuga',
+        'tomate': 'Tomate',
+        'cebolla': 'Cebolla',
+        'zanahoria': 'Zanahoria',
+        'apio': 'Apio',
+        'pimiento': 'Pimiento',
+        'ajo': 'Ajo',
+        'papa': 'Papa',
+        'papas': 'Papa',
+        
+        # Frutas
+        'manzana': 'Manzana',
+        'platano': 'Plátano',
+        'banana': 'Plátano',
+        'naranja': 'Naranja',
+        'limon': 'Limón',
+        'palta': 'Palta',
+        'aguacate': 'Palta',
+        
+        # Abarrotes
+        'arroz': 'Arroz',
+        'fideos': 'Fideos',
+        'pasta': 'Fideos',
+        'harina': 'Harina',
+        'azucar': 'Azúcar',
+        'aceite': 'Aceite',
+        'sal': 'Sal',
+        'pan': 'Pan',
+        
+        # Condimentos
+        'salsa': 'Salsa',
+        'mayonesa': 'Mayonesa',
+        'mostaza': 'Mostaza',
+        'ketchup': 'Ketchup',
+        
+        # Otros
+        'agua': 'Agua',
+        'bebida': 'Bebida',
+        'jugo': 'Jugo',
+    }
+    
+    product_lower = product_name.lower()
+    
+    # Buscar coincidencias en el nombre
+    for keyword, generic_type in generic_types.items():
+        if keyword in product_lower:
+            return generic_type
+    
+    # Si no encuentra coincidencia, usar la primera palabra del nombre
+    first_word = product_name.split()[0] if product_name.split() else product_name
+    return first_word.capitalize()
+
+def get_inventory_summary_by_generic_type(db: Session, user_id: str) -> Dict:
+    """
+    Obtiene un resumen del inventario agrupado por tipo genérico
+    """
+    try:
+        grouped_inventory = get_user_inventory_grouped_by_product_type(db, user_id)
+        
+        total_generic_types = len(grouped_inventory)
+        low_stock_types = len([item for item in grouped_inventory if item["stock_level"] in [StockLevel.BAJO, StockLevel.AGOTADO]])
+        
+        # Agrupar por categoría
+        categories_summary = {}
+        for item in grouped_inventory:
+            category = item["category"]
+            if category not in categories_summary:
+                categories_summary[category] = {
+                    "generic_types_count": 0,
+                    "total_quantity": 0.0,
+                    "low_stock_count": 0
+                }
+            
+            categories_summary[category]["generic_types_count"] += 1
+            categories_summary[category]["total_quantity"] += item["total_quantity"]
+            
+            if item["stock_level"] in [StockLevel.BAJO, StockLevel.AGOTADO]:
+                categories_summary[category]["low_stock_count"] += 1
+        
+        return {
+            "total_generic_types": total_generic_types,
+            "total_categories": len(categories_summary),
+            "low_stock_types": low_stock_types,
+            "categories": categories_summary,
+            "grouped_inventory": grouped_inventory,
+            "last_updated": datetime.utcnow()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en get_inventory_summary_by_generic_type: {e}")
+        return {
+            "total_generic_types": 0,
+            "total_categories": 0,
+            "low_stock_types": 0,
+            "categories": {},
+            "grouped_inventory": [],
+            "last_updated": datetime.utcnow()
+        }

@@ -235,7 +235,351 @@ export const apiService = {
     },
   },
 
-  // Agregar más servicios según tus endpoints
+  // Inventory endpoints
+  inventory: {
+    // Obtener resumen del inventario
+    getSummary: async (userId) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/summary`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Inventory Summary API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener items del inventario
+    getItems: async (userId, options = {}) => {
+      const params = new URLSearchParams();
+      if (options.category) params.append('category', options.category);
+      if (options.stock_level) params.append('stock_level', options.stock_level);
+      if (options.limit) params.append('limit', options.limit.toString());
+      if (options.offset) params.append('offset', options.offset.toString());
+
+      const url = `${config.API_URL}/inventory/user/${userId}/items${params.toString() ? '?' + params.toString() : ''}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Inventory Items API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener productos con stock bajo
+    getLowStock: async (userId) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/low-stock`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Low Stock API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener productos próximos a vencer
+    getExpiringSoon: async (userId, days = 3) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/expiring-soon?days=${days}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Expiring Soon API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener categorías de productos
+    getCategories: async () => {
+      const response = await fetch(`${config.API_URL}/inventory/products/categories`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Categories API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener inventario por categoría
+    getByCategory: async (userId, category) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/by-category/${category}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Category Items API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Agregar producto al inventario
+    addItem: async (userId, itemData) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/add-item`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(itemData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Add Item API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Actualizar item del inventario
+    updateItem: async (itemId, updateData) => {
+      const response = await fetch(`${config.API_URL}/inventory/items/${itemId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Update Item API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Consumir producto del inventario
+    consumeItem: async (itemId, quantity, reason = null) => {
+      const params = new URLSearchParams({ quantity: quantity.toString() });
+      if (reason) params.append('reason', reason);
+
+      const response = await fetch(`${config.API_URL}/inventory/items/${itemId}/consume?${params.toString()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Consume Item API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Eliminar item del inventario
+    deleteItem: async (itemId) => {
+      const response = await fetch(`${config.API_URL}/inventory/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Delete Item API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Buscar productos
+    searchProducts: async (query, limit = 10) => {
+      const params = new URLSearchParams({ q: query, limit: limit.toString() });
+      
+      const response = await fetch(`${config.API_URL}/inventory/products/search?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Search Products API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener historial de movimientos
+    getMovements: async (userId, productId = null, limit = 50, offset = 0) => {
+      const params = new URLSearchParams({ limit: limit.toString(), offset: offset.toString() });
+      if (productId) params.append('product_id', productId.toString());
+
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/movements?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Movements API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener inventario agrupado por tipo genérico
+    getGroupedInventory: async (userId) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/grouped`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Grouped Inventory API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener resumen agrupado
+    getSummaryGrouped: async (userId) => {
+      const response = await fetch(`${config.API_URL}/inventory/user/${userId}/summary-grouped`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Summary Grouped API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Endpoints demo
+    demo: {
+      getSummary: async () => {
+        const response = await fetch(`${config.API_URL}/inventory/demo/summary`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Demo Summary API Error:', response.status, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data;
+      },
+
+      getItems: async (category = null) => {
+        const params = category ? `?category=${category}` : '';
+        
+        const response = await fetch(`${config.API_URL}/inventory/demo/items${params}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Demo Items API Error:', response.status, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data;
+      },
+
+      addSampleData: async () => {
+        const response = await fetch(`${config.API_URL}/inventory/demo/add-sample-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Demo Sample Data API Error:', response.status, errorText);
+          throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        return data;
+      },
+    }
+  },
 };
 
 export default apiService;

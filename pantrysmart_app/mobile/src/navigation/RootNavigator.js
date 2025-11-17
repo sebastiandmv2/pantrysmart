@@ -15,6 +15,8 @@ import ReviewScreen from "../screens/ReviewScreen";
 import ReceiptsScreen from "../screens/ReceiptsScreen";
 import ReceiptDetailScreen from "../screens/ReceiptDetailScreen";
 import ReceiptConfirmScreen from "../screens/ReceiptConfirmScreen";
+import AddProductScreen from "../screens/AddProductScreen";
+import InventoryScreen from "../screens/InventoryScreen";
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -107,12 +109,12 @@ function MainTabs() {
       />
 
       <Tabs.Screen
-        name="Receipts"
-        component={ReceiptsScreen}
+        name="Inventory"
+        component={InventoryScreen}
         options={{
-          title: "Boletas",
+          title: "Inventario",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="receipt" size={size} color={color} />
+            <MaterialCommunityIcons name="package-variant" size={size} color={color} />
           ),
         }}
       />
@@ -140,6 +142,8 @@ export default function RootNavigator() {
       <Stack.Screen name="Scan" component={ScanScreen} options={{ title: "Escanear boleta" }} />
       <Stack.Screen name="Review" component={ReviewScreen} options={{ title: "Revisar productos" }} />
       <Stack.Screen name="List" component={ListScreen} options={{ title: "Lista de compras" }} />
+      <Stack.Screen name="AddProduct" component={AddProductScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Receipts" component={ReceiptsScreen} options={{ title: "Mis boletas" }} />
       <Stack.Screen name="ReceiptConfirm" component={ReceiptConfirmScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReceiptDetail" component={ReceiptDetailScreen} options={{ headerShown: false }} />
     </Stack.Navigator>

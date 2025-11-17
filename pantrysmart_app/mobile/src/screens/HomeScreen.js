@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -6,32 +6,75 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useHealthCheck } from "../hooks/useApi";
+import { useInventory } from "../hooks/useInventory";
+import { useFocusEffect } from "@react-navigation/native";
 
-const MISSING_TAGS = ["Leche 0L / 1L", "Huevos 0 / 12", "Arroz 150g / 500g"];
-
-const CATEGORIES = [
-  { id: "lacteos", name: "Lácteos", count: 8, icon: "bottle-soda" },
-  { id: "verduras", name: "Verduras", count: 12, icon: "sprout" },
-  { id: "despensa", name: "Despensa", count: 24, icon: "package-variant-closed" },
-  { id: "carnes", name: "Carnes", count: 6, icon: "food-drumstick" },
-  { id: "bebidas", name: "Bebidas", count: 15, icon: "cup-water" },
-];
-
-const RECENT_PRODUCTS = [
-  { id: "1", name: "Tomates cherry", note: "500g • $1.990 • hace 2 días", level: "alto" },
-  { id: "2", name: "Queso mantecoso", note: "200g • $2.890 • hace 2 días", level: "alto" },
-  { id: "3", name: "Aceite de oliva", note: "500ml • $3.490 • hace 1 semana", level: "medio" },
-  { id: "4", name: "Arroz integral", note: "1kg • $1.270 • hace 3 semanas", level: "bajo" },
-];
+// Mapeo de iconos por categoría (fallback para categorías sin icono específico)
+const CATEGORY_ICON_MAP = {
+  "Abarrotes": "package-variant-closed",
+  "Lácteos": "bottle-soda", 
+  "Carnes": "food-drumstick",
+  "Embutidos": "sausage",
+  "Panadería": "bread-slice",
+  "Verduras": "sprout",
+  "Frutas": "apple",
+  "Congelados": "snowflake",
+  "Dulces": "candy",
+  "Snacks": "popcorn",
+  "Condimentos": "shaker-outline",
+  "Bebestibles": "cup-water",
+  "Limpieza": "spray-bottle",
+  "Cuidado Personal": "face-woman",
+  "Mascotas": "dog",
+  "Hogar": "home-variant"
+};
 
 export default function HomeScreen({ navigation }) {
   const { data: healthData, loading: healthLoading, error: healthError } = useHealthCheck();
+  const {
+    loading: inventoryLoading,
+    error: inventoryError,
+    summary,
+    categories,
+    refresh
+  } = useInventory();
+  
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Refrescar datos cuando la pantalla obtiene foco
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refresh();
+    setRefreshing(false);
+  }, [refresh]);
+
+  // Obtener conteo total de productos
+  const totalProducts = summary?.total_products || 0;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 28 }}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={{ paddingBottom: 28 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#2f7d36"]}
+          tintColor="#2f7d36"
+        />
+      }
+    >
       {/* Estado de conexión con API */}
       <View style={styles.connectionStatus}>
         <MaterialCommunityIcons 
@@ -46,7 +89,16 @@ export default function HomeScreen({ navigation }) {
 
       {/* Encabezado */}
       <Text style={styles.greeting}>Hola, Usuario 👋</Text>
-      <Text style={styles.subtitle}>Tienes 24 productos en tu despensa</Text>
+      {inventoryLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#2f7d36" />
+          <Text style={styles.loadingText}>Cargando inventario...</Text>
+        </View>
+      ) : (
+        <Text style={styles.subtitle}>
+          Tienes {totalProducts} producto{totalProducts !== 1 ? 's' : ''} en tu despensa
+        </Text>
+      )}
 
       {/* Acciones */}
       <View style={styles.actionsRow}>
@@ -63,7 +115,10 @@ export default function HomeScreen({ navigation }) {
           <Text style={[styles.actionText, { color: "#fff" }]}>Escanear boleta</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity 
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate("AddProduct")}
+        >
           <MaterialCommunityIcons
             name="plus"
             size={18}
@@ -75,14 +130,17 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.actionBtn}>
+        <TouchableOpacity 
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate("Inventory")}
+        >
           <MaterialCommunityIcons
-            name="calendar-month"
+            name="package-variant"
             size={18}
             color="#111"
             style={{ marginRight: 6 }}
           />
-          <Text style={styles.actionText}>Plan semanal</Text>
+          <Text style={styles.actionText}>Inventario</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -99,105 +157,85 @@ export default function HomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* KPIs */}
-      <View style={styles.infoRow}>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>Faltantes</Text>
-          <Text style={styles.infoValue}>3 productos</Text>
-        </View>
-        <View style={styles.infoCard}>
-          <Text style={styles.infoLabel}>Ahorro semanal</Text>
-          <Text style={styles.infoValue}>$12.450</Text>
-        </View>
-      </View>
 
-      {/* ======  Productos faltantes ====== */}
-      <Section title="Productos faltantes" subtitle="para tus recetas y plan semanal" badge="3">
-        <View style={styles.chipsRow}>
-          {MISSING_TAGS.map((t) => (
-            <Chip key={t} text={t} />
-          ))}
-        </View>
 
-        <View style={styles.row}>
-          {/* Botón Agregar a lista */}
-          <TouchableOpacity
-            style={[styles.ctaBtn, styles.ctaPrimary]}
-            onPress={() => navigation.navigate("List")} // 👈 Navega a ListScreen
+
+
+      {/* ======  Inventario ====== */}
+      <Section 
+        title="Inventario"
+        action={
+          <TouchableOpacity 
+            style={styles.sectionAction}
+            onPress={() => navigation.navigate("Inventory")}
           >
-            <MaterialCommunityIcons
-              name="cart-plus"
-              color="#fff"
-              size={18}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.ctaText, { color: "#fff" }]}>Agregar a lista</Text>
+            <Text style={styles.sectionActionText}>Ver todo</Text>
+            <MaterialCommunityIcons name="chevron-right" size={16} color="#2f7d36" />
           </TouchableOpacity>
-
-          {/* Botón Ver detalles */}
-          <TouchableOpacity style={[styles.ctaBtn, styles.ctaGhost]}>
-            <MaterialCommunityIcons
-              name="eye-outline"
-              color="#111"
-              size={18}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={styles.ctaText}>Ver detalles</Text>
-          </TouchableOpacity>
+        }
+      >
+        {/* Cuadro de total productos */}
+        <View style={styles.totalProductsCard}>
+          <MaterialCommunityIcons name="package-variant" size={24} color="#2f7d36" />
+          <Text style={styles.totalProductsNumber}>{totalProducts}</Text>
+          <Text style={styles.totalProductsLabel}>Productos únicos</Text>
         </View>
-      </Section>
-
-      {/* ======  Inventario por categoría ====== */}
-      <Section title="Inventario por categoría">
-        <View style={styles.categoriesGrid}>
-          {CATEGORIES.map((c) => (
-            <TouchableOpacity key={c.id} style={styles.catCard}>
-              <View style={[styles.catIconWrap]}>
-                <MaterialCommunityIcons name={c.icon} size={18} color="#2f7d36" />
-              </View>
-              <View>
-                <Text style={styles.catName}>{c.name}</Text>
-                <Text style={styles.catCount}>{c.count} productos</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </Section>
-
-      {/* ======  Productos recientes ====== */}
-      <Section title="Productos recientes">
-        <FlatList
-          data={RECENT_PRODUCTS}
-          keyExtractor={(i) => i.id}
-          scrollEnabled={false}
-          ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          renderItem={({ item }) => (
-            <View style={styles.recentRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.recentName}>{item.name}</Text>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}>
-                  <Badge level={item.level} />
-                  <Text style={styles.recentNote}>{item.note}</Text>
+        {inventoryLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color="#2f7d36" />
+            <Text style={styles.loadingText}>Cargando categorías...</Text>
+          </View>
+        ) : categories.length > 0 ? (
+          <View style={styles.categoriesGrid}>
+            {categories.map((category) => (
+              <TouchableOpacity 
+                key={category.id} 
+                style={styles.catCard}
+                onPress={() => {
+                  // Navegar al inventario con la categoría seleccionada
+                  navigation.navigate("Inventory", { selectedCategory: category.name });
+                }}
+              >
+                <View style={[styles.catIconWrap, { backgroundColor: category.color + '20' }]}>
+                  <MaterialCommunityIcons 
+                    name={category.icon || CATEGORY_ICON_MAP[category.name] || "package-variant"} 
+                    size={18} 
+                    color={category.color || "#2f7d36"} 
+                  />
                 </View>
-              </View>
-              <TouchableOpacity style={styles.plusBtn}>
-                <MaterialCommunityIcons name="plus" size={18} color="#111" />
+                <View>
+                  <Text style={styles.catName}>{category.name}</Text>
+                  <Text style={styles.catCount}>{category.count} producto{category.count !== 1 ? 's' : ''}</Text>
+                </View>
               </TouchableOpacity>
-            </View>
-          )}
-        />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <MaterialCommunityIcons name="package-variant" size={32} color="#9ca3af" />
+            <Text style={styles.emptyText}>No hay productos en el inventario</Text>
+            <TouchableOpacity 
+              style={styles.addFirstProductBtn}
+              onPress={() => navigation.navigate("Scan")}
+            >
+              <Text style={styles.addFirstProductText}>Escanear primera boleta</Text>
+            </TouchableOpacity>
+        </View>
+        )}
       </Section>
+
+
     </ScrollView>
   );
 }
 
 /* =============== Componentes UI locales =============== */
 
-function Section({ title, subtitle, badge, children }) {
+function Section({ title, subtitle, badge, action, children }) {
   return (
     <View style={styles.sectionCard}>
       <View style={styles.sectionHeader}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>{title}</Text>
           {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
         </View>
@@ -206,33 +244,14 @@ function Section({ title, subtitle, badge, children }) {
             <Text style={styles.badgeText}>{badge}</Text>
           </View>
         ) : null}
+        {action ? action : null}
       </View>
       {children}
     </View>
   );
 }
 
-function Chip({ text }) {
-  return (
-    <View style={styles.chip}>
-      <Text style={styles.chipText}>{text}</Text>
-    </View>
-  );
-}
 
-function Badge({ level }) {
-  const map = {
-    alto: { bg: "#dcfce7", fg: "#166534", text: "alto" },
-    medio: { bg: "#fef9c3", fg: "#854d0e", text: "medio" },
-    bajo: { bg: "#fee2e2", fg: "#991b1b", text: "bajo" },
-  };
-  const c = map[level] || map.alto;
-  return (
-    <View style={[styles.levelBadge, { backgroundColor: c.bg }]}>
-      <Text style={[styles.levelBadgeText, { color: c.fg }]}>{c.text}</Text>
-    </View>
-  );
-}
 
 /* ===================== Estilos ===================== */
 
@@ -273,16 +292,7 @@ const styles = StyleSheet.create({
   actionPrimary: { backgroundColor: "#2f7d36" },
   actionText: { color: "#000", fontWeight: "600", fontSize: 14 },
 
-  infoRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 12, gap: 12 },
-  infoCard: {
-    flex: 1,
-    backgroundColor: "#ecfdf5",
-    padding: 16,
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  infoLabel: { fontSize: 14, color: "#555", marginBottom: 6 },
-  infoValue: { fontSize: 18, fontWeight: "700", color: "#059669" },
+
 
   sectionCard: {
     backgroundColor: "#fff",
@@ -306,30 +316,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: "#2f7d36", fontWeight: "700", fontSize: 12 },
 
-  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
-  chip: {
-    backgroundColor: "#eef2f7",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-  },
-  chipText: { color: "#111", fontWeight: "600", fontSize: 12 },
 
-  row: { flexDirection: "row", alignItems: "center", gap: 10 },
-  ctaBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    flex: 1,
-  },
-  ctaPrimary: { backgroundColor: "#2f7d36" },
-  ctaGhost: { backgroundColor: "#f3f4f6" },
-  ctaText: { fontWeight: "700" },
 
   categoriesGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   catCard: {
@@ -355,28 +342,74 @@ const styles = StyleSheet.create({
   catName: { fontWeight: "700" },
   catCount: { color: "#6b7280", fontSize: 12 },
 
-  recentRow: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+
+
+  // Nuevos estilos para estados de carga y vacío
+  loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
   },
-  recentName: { fontWeight: "700" },
-  recentNote: { color: "#6b7280", fontSize: 12 },
-  levelBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  levelBadgeText: { fontSize: 11, fontWeight: "700" },
-  plusBtn: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    width: 32,
-    height: 32,
+  loadingText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontStyle: "italic",
+  },
+  emptyState: {
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f9fafb",
+    paddingVertical: 24,
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+  },
+  addFirstProductBtn: {
+    backgroundColor: "#2f7d36",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  addFirstProductText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  sectionAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "#ecfdf5",
+  },
+  sectionActionText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#2f7d36",
+  },
+  totalProductsCard: {
+    backgroundColor: "#f8fffe",
+    borderWidth: 1,
+    borderColor: "#a7f3d0",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  totalProductsNumber: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#2f7d36",
+    marginVertical: 4,
+  },
+  totalProductsLabel: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "600",
   },
 });
