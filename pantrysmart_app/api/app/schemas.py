@@ -131,18 +131,16 @@ class ProductOut(ProductBase):
         from_attributes = True
 
 # ===============================
-# USER INVENTORY SCHEMAS
+# USER INVENTORY SCHEMAS - SIMPLIFICADO
 # ===============================
 
 class UserInventoryBase(BaseModel):
-    current_quantity: confloat(ge=0.0)
-    unit: Optional[str] = Field(None, max_length=50)
+    current_quantity: conint(ge=0)  # SOLO ENTEROS
+    # unit eliminado - siempre "unidades"
     stock_level: StockLevelEnum = StockLevelEnum.MEDIO
-    purchase_date: Optional[datetime] = None
-    expiration_date: Optional[datetime] = None
-    purchase_price: Optional[confloat(ge=0.0)] = None
+    # Campos simplificados eliminados para POC
     store_purchased: Optional[str] = Field(None, max_length=255)
-    min_stock_alert: Optional[confloat(ge=0.0)] = 1.0
+    min_stock_alert: Optional[conint(ge=0)] = 1
     auto_consume: bool = True
 
 class UserInventoryCreate(UserInventoryBase):
@@ -150,14 +148,12 @@ class UserInventoryCreate(UserInventoryBase):
     user_id: str = Field(..., max_length=100)
 
 class UserInventoryUpdate(BaseModel):
-    current_quantity: Optional[confloat(ge=0.0)] = None
-    unit: Optional[str] = Field(None, max_length=50)
+    current_quantity: Optional[conint(ge=0)] = None  # SOLO ENTEROS
+    # unit eliminado - siempre "unidades"
     stock_level: Optional[StockLevelEnum] = None
-    purchase_date: Optional[datetime] = None
-    expiration_date: Optional[datetime] = None
-    purchase_price: Optional[confloat(ge=0.0)] = None
+    # Campos simplificados eliminados para POC
     store_purchased: Optional[str] = Field(None, max_length=255)
-    min_stock_alert: Optional[confloat(ge=0.0)] = None
+    min_stock_alert: Optional[conint(ge=0)] = None
     auto_consume: Optional[bool] = None
 
 class UserInventoryOut(UserInventoryBase):
@@ -177,28 +173,27 @@ class UserInventoryOut(UserInventoryBase):
 
 class InventoryMovementBase(BaseModel):
     movement_type: MovementTypeEnum
-    quantity_change: float
-    unit: Optional[str] = Field(None, max_length=50)
+    quantity_change: int  # SOLO ENTEROS
+    # unit eliminado - siempre "unidades"
     reason: Optional[str] = Field(None, max_length=500)
     reference_id: Optional[str] = Field(None, max_length=100)
     reference_type: Optional[str] = Field(None, max_length=50)
-    cost_per_unit: Optional[confloat(ge=0.0)] = None
-    total_cost: Optional[confloat(ge=0.0)] = None
+    # Costos eliminados para POC
     notes: Optional[str] = None
 
 class InventoryMovementCreate(InventoryMovementBase):
     user_id: str = Field(..., max_length=100)
     product_id: int
-    quantity_before: confloat(ge=0.0)
-    quantity_after: confloat(ge=0.0)
+    quantity_before: conint(ge=0)  # SOLO ENTEROS
+    quantity_after: conint(ge=0)   # SOLO ENTEROS
 
 class InventoryMovementOut(InventoryMovementBase):
     id: int
     user_id: str
     product_id: int
     inventory_item_id: Optional[int]
-    quantity_before: float
-    quantity_after: float
+    quantity_before: int  # SOLO ENTEROS
+    quantity_after: int   # SOLO ENTEROS
     created_at: datetime
     created_by: Optional[str]
     product: ProductOut
@@ -228,17 +223,16 @@ class UserInventorySummary(BaseModel):
     last_updated: datetime
 
 # ===============================
-# QUICK ADD SCHEMAS
+# QUICK ADD SCHEMAS - SIMPLIFICADO
 # ===============================
 
 class QuickAddInventoryItem(BaseModel):
-    """Schema para agregar productos rápidamente al inventario"""
+    """Schema para agregar productos rápidamente al inventario - SIMPLIFICADO"""
     product_name: str = Field(..., min_length=1, max_length=255)
     category: ProductCategoryEnum
-    quantity: confloat(gt=0.0)
-    unit: Optional[str] = Field("unidades", max_length=50)
-    purchase_date: Optional[datetime] = None
-    expiration_date: Optional[datetime] = None
+    quantity: conint(gt=0)  # SOLO ENTEROS POSITIVOS
+    # unit eliminado - siempre "unidades"
+    # Fechas eliminadas para POC
     store_purchased: Optional[str] = Field(None, max_length=255)
 
 class BulkAddInventoryItems(BaseModel):
@@ -259,8 +253,8 @@ class DifficultyLevelEnum(str, Enum):
 
 class RecipeIngredientBase(BaseModel):
     product_id: int
-    quantity_needed: confloat(gt=0.0)
-    unit: str = Field(..., max_length=50)
+    quantity_needed: conint(gt=0)  # SOLO ENTEROS POSITIVOS
+    # unit eliminado - siempre "unidades"
     is_optional: bool = False
     notes: Optional[str] = Field(None, max_length=255)
 
@@ -277,7 +271,7 @@ class RecipeIngredientOut(RecipeIngredientBase):
 
 class RecipeIngredientWithAvailability(RecipeIngredientOut):
     """Ingrediente con información de disponibilidad en inventario"""
-    available_quantity: float
+    available_quantity: int  # SOLO ENTEROS
     has_enough: bool
     availability_percentage: float
 

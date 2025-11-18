@@ -212,17 +212,14 @@ def add_inventory_item(
     item: QuickAddInventoryItem,
     db: Session = Depends(get_db)
 ):
-    """Agregar un producto al inventario del usuario"""
+    """Agregar un producto al inventario del usuario - SIMPLIFICADO"""
     try:
         inventory_item, movement = add_to_inventory(
             db=db,
             user_id=user_id,
             product_name=item.product_name,
             category=item.category,
-            quantity=item.quantity,
-            unit=item.unit,
-            purchase_date=item.purchase_date,
-            expiration_date=item.expiration_date,
+            quantity=item.quantity,  # Ya es entero por el schema actualizado
             store_purchased=item.store_purchased
         )
         
@@ -252,10 +249,7 @@ def bulk_add_inventory_items(
                 user_id=bulk_data.user_id,
                 product_name=item.product_name,
                 category=item.category,
-                quantity=item.quantity,
-                unit=item.unit,
-                purchase_date=item.purchase_date,
-                expiration_date=item.expiration_date,
+                quantity=item.quantity,  # Ya es entero por el schema actualizado
                 store_purchased=item.store_purchased
             )
             results.append({
@@ -305,7 +299,7 @@ def update_inventory_item(
 @router.post("/inventory/items/{item_id}/consume", tags=["inventory"])
 def consume_inventory_item(
     item_id: int,
-    quantity: float = Query(..., gt=0),
+    quantity: int = Query(..., gt=0),  # SOLO ENTEROS
     reason: Optional[str] = None,
     reference_id: Optional[str] = None,
     reference_type: Optional[str] = None,

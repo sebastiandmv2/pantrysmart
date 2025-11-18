@@ -12,16 +12,15 @@ from app.models import Recipe, RecipeIngredient, Product, ProductCategory, Base
 # Crear todas las tablas
 Base.metadata.create_all(bind=engine)
 
-def get_or_create_product(db: Session, name: str, category: ProductCategory, unit: str = "unidades"):
-    """Obtener o crear un producto"""
+def get_or_create_product(db: Session, name: str, category: ProductCategory):
+    """Obtener o crear un producto - SIMPLIFICADO: solo unidades"""
     product = db.query(Product).filter(Product.name == name).first()
     if not product:
         product = Product(
             name=name,
             category=category,
-            default_unit=unit,
-            is_perishable=category in [ProductCategory.CARNES, ProductCategory.LACTEOS, 
-                                     ProductCategory.VERDURAS, ProductCategory.FRUTAS]
+            default_unit="unidades",  # SIEMPRE unidades
+            is_perishable=False  # Simplificado para POC
         )
         db.add(product)
         db.flush()
@@ -62,11 +61,11 @@ def populate_recipes():
 6. Hornear a 200°C por 20-25 minutos hasta dorar""",
                 "tags": "tradicional,chileno,horno",
                 "ingredients": [
-                    ("Carne molida", ProductCategory.CARNES, 500, "gramos"),
-                    ("Cebolla", ProductCategory.VERDURAS, 2, "unidades"),
-                    ("Huevo", ProductCategory.LACTEOS, 3, "unidades"),
-                    ("Harina", ProductCategory.ABARROTES, 500, "gramos"),
-                    ("Aceite", ProductCategory.ABARROTES, 100, "ml")
+                    ("Carne molida", ProductCategory.CARNES, 1),
+                    ("Cebolla", ProductCategory.VERDURAS, 2),
+                    ("Huevo", ProductCategory.LACTEOS, 3),
+                    ("Harina", ProductCategory.ABARROTES, 1),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -84,11 +83,11 @@ def populate_recipes():
 6. Hornear hasta dorar la superficie""",
                 "tags": "tradicional,chileno,verano",
                 "ingredients": [
-                    ("Carne molida", ProductCategory.CARNES, 400, "gramos"),
-                    ("Pollo", ProductCategory.CARNES, 300, "gramos"),
-                    ("Cebolla", ProductCategory.VERDURAS, 2, "unidades"),
-                    ("Huevo", ProductCategory.LACTEOS, 3, "unidades"),
-                    ("Leche", ProductCategory.LACTEOS, 200, "ml")
+                    ("Carne molida", ProductCategory.CARNES, 1),
+                    ("Pollo", ProductCategory.CARNES, 1),
+                    ("Cebolla", ProductCategory.VERDURAS, 2),
+                    ("Huevo", ProductCategory.LACTEOS, 3),
+                    ("Leche", ProductCategory.LACTEOS, 1)
                 ]
             },
             {
@@ -105,10 +104,10 @@ def populate_recipes():
 5. Condimentar al gusto""",
                 "tags": "sopa,tradicional,invierno",
                 "ingredients": [
-                    ("Pollo", ProductCategory.CARNES, 800, "gramos"),
-                    ("Zanahoria", ProductCategory.VERDURAS, 2, "unidades"),
-                    ("Cebolla", ProductCategory.VERDURAS, 1, "unidades"),
-                    ("Arroz", ProductCategory.ABARROTES, 100, "gramos")
+                    ("Pollo", ProductCategory.CARNES, 1),
+                    ("Zanahoria", ProductCategory.VERDURAS, 2),
+                    ("Cebolla", ProductCategory.VERDURAS, 1),
+                    ("Arroz", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -125,8 +124,8 @@ def populate_recipes():
 5. Servir inmediatamente""",
                 "tags": "rapido,chileno,sandwich",
                 "ingredients": [
-                    ("Pan", ProductCategory.PANADERIA, 2, "unidades"),
-                    ("Tomate", ProductCategory.VERDURAS, 1, "unidades")
+                    ("Pan", ProductCategory.PANADERIA, 2),
+                    ("Tomate", ProductCategory.VERDURAS, 1)
                 ]
             },
             {
@@ -143,9 +142,9 @@ def populate_recipes():
 5. Condimentar y servir caliente""",
                 "tags": "tradicional,vegetariano,economico",
                 "ingredients": [
-                    ("Fideos", ProductCategory.ABARROTES, 200, "gramos"),
-                    ("Cebolla", ProductCategory.VERDURAS, 1, "unidades"),
-                    ("Aceite", ProductCategory.ABARROTES, 50, "ml")
+                    ("Fideos", ProductCategory.ABARROTES, 1),
+                    ("Cebolla", ProductCategory.VERDURAS, 1),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -162,11 +161,11 @@ def populate_recipes():
 5. Cocinar hasta que el arroz esté tierno""",
                 "tags": "facil,economico,nutritivo",
                 "ingredients": [
-                    ("Arroz", ProductCategory.ABARROTES, 300, "gramos"),
-                    ("Pollo", ProductCategory.CARNES, 500, "gramos"),
-                    ("Cebolla", ProductCategory.VERDURAS, 1, "unidades"),
-                    ("Zanahoria", ProductCategory.VERDURAS, 1, "unidades"),
-                    ("Aceite", ProductCategory.ABARROTES, 30, "ml")
+                    ("Arroz", ProductCategory.ABARROTES, 1),
+                    ("Pollo", ProductCategory.CARNES, 1),
+                    ("Cebolla", ProductCategory.VERDURAS, 1),
+                    ("Zanahoria", ProductCategory.VERDURAS, 1),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -183,9 +182,9 @@ def populate_recipes():
 5. Mezclar todo y cocinar unos minutos más""",
                 "tags": "tradicional,economico,nutritivo",
                 "ingredients": [
-                    ("Carne molida", ProductCategory.CARNES, 300, "gramos"),
-                    ("Cebolla", ProductCategory.VERDURAS, 1, "unidades"),
-                    ("Aceite", ProductCategory.ABARROTES, 30, "ml")
+                    ("Carne molida", ProductCategory.CARNES, 1),
+                    ("Cebolla", ProductCategory.VERDURAS, 1),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -202,8 +201,8 @@ def populate_recipes():
 5. Freír en aceite caliente hasta dorar""",
                 "tags": "tradicional,frito,lluvia",
                 "ingredients": [
-                    ("Harina", ProductCategory.ABARROTES, 400, "gramos"),
-                    ("Aceite", ProductCategory.ABARROTES, 200, "ml")
+                    ("Harina", ProductCategory.ABARROTES, 1),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -220,9 +219,9 @@ def populate_recipes():
 5. Acompañar con ensalada si se desea""",
                 "tags": "carne,contundente,clasico",
                 "ingredients": [
-                    ("Carne molida", ProductCategory.CARNES, 400, "gramos"),
-                    ("Huevo", ProductCategory.LACTEOS, 2, "unidades"),
-                    ("Aceite", ProductCategory.ABARROTES, 100, "ml")
+                    ("Carne molida", ProductCategory.CARNES, 1),
+                    ("Huevo", ProductCategory.LACTEOS, 2),
+                    ("Aceite", ProductCategory.ABARROTES, 1)
                 ]
             },
             {
@@ -239,10 +238,10 @@ def populate_recipes():
 5. Formar panes y hornear hasta dorar""",
                 "tags": "panaderia,casero,tradicional",
                 "ingredients": [
-                    ("Harina", ProductCategory.ABARROTES, 500, "gramos"),
-                    ("Leche", ProductCategory.LACTEOS, 250, "ml"),
-                    ("Huevo", ProductCategory.LACTEOS, 1, "unidades"),
-                    ("Azucar", ProductCategory.ABARROTES, 50, "gramos")
+                    ("Harina", ProductCategory.ABARROTES, 1),
+                    ("Leche", ProductCategory.LACTEOS, 1),
+                    ("Huevo", ProductCategory.LACTEOS, 1),
+                    ("Azucar", ProductCategory.ABARROTES, 1)
                 ]
             }
         ]
@@ -268,15 +267,15 @@ def populate_recipes():
             db.add(recipe)
             db.flush()  # Para obtener el ID
             
-            # Crear ingredientes
-            for ingredient_name, category, quantity, unit in recipe_data["ingredients"]:
-                product = get_or_create_product(db, ingredient_name, category, unit)
+            # Crear ingredientes - SIMPLIFICADO: solo unidades
+            for ingredient_name, category, quantity in recipe_data["ingredients"]:
+                product = get_or_create_product(db, ingredient_name, category)
                 
                 ingredient = RecipeIngredient(
                     recipe_id=recipe.id,
                     product_id=product.id,
                     quantity_needed=quantity,
-                    unit=unit,
+                    unit="unidades",  # SIEMPRE unidades
                     is_optional=False
                 )
                 db.add(ingredient)

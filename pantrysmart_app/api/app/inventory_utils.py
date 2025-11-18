@@ -25,6 +25,7 @@ def find_or_create_product(
 ) -> Product:
     """
     Busca un producto genérico por nombre exacto o lo crea si no existe
+    SIMPLIFICADO: Solo unidades enteras
     """
     # Buscar producto existente por nombre exacto (para productos genéricos)
     existing_product = db.query(Product).filter(
@@ -34,15 +35,15 @@ def find_or_create_product(
     if existing_product:
         return existing_product
     
-    # Crear nuevo producto genérico simplificado
+    # Crear nuevo producto genérico ULTRA-SIMPLIFICADO
     new_product = Product(
         name=product_name.strip(),
         category=category,
         description=f"Producto genérico: {product_name}",
-        default_unit="unidades",  # Unidad por defecto simplificada
-        barcode=None,  # No necesitamos códigos de barras para productos genéricos
-        is_perishable=False,  # Simplificado: no manejar fechas de vencimiento
-        typical_shelf_life_days=None  # No necesario para inventario simplificado
+        default_unit="unidades",  # SIEMPRE unidades
+        barcode=None,  # No necesario para POC
+        is_perishable=False,  # No fechas para POC
+        typical_shelf_life_days=None  # No necesario para POC
     )
     
     db.add(new_product)
@@ -55,15 +56,12 @@ def get_or_create_inventory_item(
     db: Session,
     user_id: str,
     product: Product,
-    initial_quantity: float = 0.0,
-    unit: Optional[str] = None,
-    purchase_date: Optional[datetime] = None,
-    expiration_date: Optional[datetime] = None,
-    store_purchased: Optional[str] = None,
-    purchase_price: Optional[float] = None
+    initial_quantity: int = 0,
+    store_purchased: Optional[str] = None
 ) -> UserInventory:
     """
-    Obtiene el item de inventario del usuario o lo crea si no existe (versión simplificada)
+    Obtiene el item de inventario del usuario o lo crea si no existe
+    ULTRA-SIMPLIFICADO: Solo unidades enteras, sin fechas ni precios
     """
     # Buscar item existente
     inventory_item = db.query(UserInventory).filter(
@@ -74,25 +72,25 @@ def get_or_create_inventory_item(
     if inventory_item:
         return inventory_item
     
-    # Crear nuevo item de inventario simplificado (sin fechas ni precios)
+    # Crear nuevo item ULTRA-SIMPLIFICADO
     inventory_item = UserInventory(
         user_id=user_id,
         product_id=product.id,
-        current_quantity=initial_quantity,
-        unit=unit or "unidades",
-        stock_level=StockLevel.MEDIO,  # Nivel por defecto simplificado
-        purchase_date=None,  # No manejar fechas de compra
-        expiration_date=None,  # No manejar fechas de vencimiento
-        purchase_price=None,  # No manejar precios
-        store_purchased=None,  # No manejar tiendas
-        min_stock_alert=1.0,  # Alerta mínima por defecto
+        current_quantity=float(initial_quantity),  # Convertir a float para BD
+        unit="unidades",  # SIEMPRE unidades
+        stock_level=StockLevel.MEDIO,
+        purchase_date=None,  # Sin fechas
+        expiration_date=None,  # Sin fechas
+        purchase_price=None,  # Sin precios
+        store_purchased=store_purchased,
+        min_stock_alert=1.0,  # Siempre 1
         auto_consume=True
     )
     
     db.add(inventory_item)
     db.flush()
     
-    logger.info(f"Item de inventario simplificado creado: {product.name} para usuario {user_id}")
+    logger.info(f"Item de inventario SIMPLIFICADO creado: {product.name} para usuario {user_id}")
     return inventory_item
 
 # ===============================
@@ -105,18 +103,17 @@ def add_inventory_movement(
     product: Product,
     inventory_item: UserInventory,
     movement_type: MovementType,
-    quantity_change: float,
+    quantity_change: int,  # SOLO ENTEROS
     reason: Optional[str] = None,
     reference_id: Optional[str] = None,
     reference_type: Optional[str] = None,
-    cost_per_unit: Optional[float] = None,
     notes: Optional[str] = None,
     created_by: Optional[str] = None
 ) -> InventoryMovement:
     """
-    Registra un movimiento de inventario
+    Registra un movimiento de inventario - SIMPLIFICADO: solo enteros
     """
-    quantity_before = inventory_item.current_quantity
+    quantity_before = int(inventory_item.current_quantity)  # Convertir a entero
     quantity_after = max(0, quantity_before + quantity_change)
     
     movement = InventoryMovement(
@@ -124,15 +121,15 @@ def add_inventory_movement(
         product_id=product.id,
         inventory_item_id=inventory_item.id,
         movement_type=movement_type,
-        quantity_change=quantity_change,
-        quantity_before=quantity_before,
-        quantity_after=quantity_after,
-        unit=inventory_item.unit,
+        quantity_change=float(quantity_change),  # Convertir a float para BD
+        quantity_before=float(quantity_before),  # Convertir a float para BD
+        quantity_after=float(quantity_after),    # Convertir a float para BD
+        unit="unidades",  # SIEMPRE unidades
         reason=reason,
         reference_id=reference_id,
         reference_type=reference_type,
-        cost_per_unit=cost_per_unit,
-        total_cost=cost_per_unit * abs(quantity_change) if cost_per_unit else None,
+        cost_per_unit=None,  # Sin costos para POC
+        total_cost=None,     # Sin costos para POC
         notes=notes,
         created_by=created_by or user_id
     )
@@ -140,11 +137,11 @@ def add_inventory_movement(
     db.add(movement)
     
     # Actualizar cantidad en inventario
-    inventory_item.current_quantity = quantity_after
-    inventory_item.stock_level = get_stock_level(quantity_after, inventory_item.min_stock_alert)
+    inventory_item.current_quantity = float(quantity_after)  # Convertir a float para BD
+    inventory_item.stock_level = get_stock_level(quantity_after, int(inventory_item.min_stock_alert))
     inventory_item.updated_at = datetime.utcnow()
     
-    logger.info(f"Movimiento registrado: {movement_type.value} - {product.name} - {quantity_change}")
+    logger.info(f"Movimiento SIMPLIFICADO registrado: {movement_type.value} - {product.name} - {quantity_change}")
     return movement
 
 def add_to_inventory(
@@ -152,31 +149,28 @@ def add_to_inventory(
     user_id: str,
     product_name: str,
     category: ProductCategory,
-    quantity: float,
-    unit: Optional[str] = None,
-    purchase_date: Optional[datetime] = None,
-    expiration_date: Optional[datetime] = None,
+    quantity: int,  # SOLO ENTEROS
     store_purchased: Optional[str] = None,
-    purchase_price: Optional[float] = None,
     movement_type: MovementType = MovementType.ADDED_MANUAL,
     reference_id: Optional[str] = None,
     reference_type: Optional[str] = None
 ) -> Tuple[UserInventory, InventoryMovement]:
     """
-    Agrega cantidad a un producto genérico en el inventario (versión simplificada)
+    Agrega cantidad a un producto genérico en el inventario
+    ULTRA-SIMPLIFICADO: Solo unidades enteras
     """
     # Buscar o crear producto genérico
     product = find_or_create_product(db, product_name, category)
     
-    # Obtener o crear item de inventario simplificado
+    # Obtener o crear item de inventario SIMPLIFICADO
     inventory_item = get_or_create_inventory_item(
         db=db,
         user_id=user_id,
         product=product,
-        unit=unit or "unidades"
+        store_purchased=store_purchased
     )
     
-    # Registrar movimiento simplificado
+    # Registrar movimiento SIMPLIFICADO
     movement = add_inventory_movement(
         db=db,
         user_id=user_id,
@@ -184,7 +178,7 @@ def add_to_inventory(
         inventory_item=inventory_item,
         movement_type=movement_type,
         quantity_change=quantity,
-        reason=f"Agregado {quantity} {unit or 'unidades'} de {product_name}",
+        reason=f"Agregado {quantity} unidades de {product_name}",
         reference_id=reference_id,
         reference_type=reference_type
     )
@@ -195,13 +189,13 @@ def consume_from_inventory(
     db: Session,
     user_id: str,
     product_id: int,
-    quantity: float,
+    quantity: int,  # SOLO ENTEROS
     reason: Optional[str] = None,
     reference_id: Optional[str] = None,
     reference_type: Optional[str] = None
 ) -> Optional[InventoryMovement]:
     """
-    Consume cantidad de un producto del inventario
+    Consume cantidad de un producto del inventario - SIMPLIFICADO
     """
     # Buscar item de inventario
     inventory_item = db.query(UserInventory).filter(
@@ -213,11 +207,12 @@ def consume_from_inventory(
         logger.warning(f"No se encontró item de inventario para producto {product_id} y usuario {user_id}")
         return None
     
-    if inventory_item.current_quantity < quantity:
-        logger.warning(f"Cantidad insuficiente en inventario: {inventory_item.current_quantity} < {quantity}")
+    current_quantity = int(inventory_item.current_quantity)  # Convertir a entero
+    if current_quantity < quantity:
+        logger.warning(f"Cantidad insuficiente en inventario: {current_quantity} < {quantity}")
         return None
     
-    # Registrar movimiento de consumo
+    # Registrar movimiento de consumo SIMPLIFICADO
     movement = add_inventory_movement(
         db=db,
         user_id=user_id,
@@ -225,7 +220,7 @@ def consume_from_inventory(
         inventory_item=inventory_item,
         movement_type=MovementType.CONSUMED,
         quantity_change=-quantity,
-        reason=reason or f"Consumido {quantity} {inventory_item.unit}",
+        reason=reason or f"Consumido {quantity} unidades",
         reference_id=reference_id,
         reference_type=reference_type
     )
@@ -459,7 +454,7 @@ def process_receipt_items_to_inventory(
                     product=existing_inventory.product,
                     inventory_item=existing_inventory,
                     movement_type=MovementType.ADDED_RECEIPT,
-                    quantity_change=quantity,
+                    quantity_change=int(quantity),  # Convertir a entero
                     reason=f"Agregado desde boleta: {quantity} unidades de {generic_product_name}",
                     reference_id=str(receipt_id) if receipt_id else None,
                     reference_type="receipt"
@@ -472,8 +467,8 @@ def process_receipt_items_to_inventory(
                     user_id=user_id,
                     product_name=generic_product_name,  # Usar nombre genérico
                     category=category,
-                    quantity=quantity,
-                    unit="unidades",  # Unidad por defecto simplificada
+                    quantity=int(quantity),  # Convertir a entero
+                    store_purchased=store_name,
                     movement_type=MovementType.ADDED_RECEIPT,
                     reference_id=str(receipt_id) if receipt_id else None,
                     reference_type="receipt"

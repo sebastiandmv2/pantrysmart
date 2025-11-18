@@ -25,7 +25,7 @@ export default function AddProductScreen({ navigation }) {
   const [productName, setProductName] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [quantity, setQuantity] = useState("1");
-  const [unit, setUnit] = useState("unidades");
+  // unit eliminado - siempre "unidades"
   const [storePurchased, setStorePurchased] = useState("");
 
   // Cargar categorías al montar el componente
@@ -55,9 +55,9 @@ export default function AddProductScreen({ navigation }) {
       return;
     }
 
-    const quantityNum = parseFloat(quantity);
-    if (isNaN(quantityNum) || quantityNum <= 0) {
-      Alert.alert("Error", "La cantidad debe ser un número mayor a 0");
+    const quantityNum = parseInt(quantity);
+    if (isNaN(quantityNum) || quantityNum <= 0 || !Number.isInteger(quantityNum)) {
+      Alert.alert("Error", "La cantidad debe ser un número entero mayor a 0");
       return;
     }
 
@@ -67,10 +67,10 @@ export default function AddProductScreen({ navigation }) {
       const itemData = {
         product_name: productName.trim(),
         category: selectedCategory.id,
-        quantity: quantityNum,
-        unit: unit.trim() || "unidades",
+        quantity: quantityNum,  // Siempre entero
+        // unit eliminado - siempre "unidades"
         store_purchased: storePurchased.trim() || null,
-        purchase_date: new Date().toISOString(),
+        // purchase_date eliminado para POC
       };
 
       await apiService.inventory.addItem(DEMO_USER_ID, itemData);
@@ -86,7 +86,7 @@ export default function AddProductScreen({ navigation }) {
               setProductName("");
               setSelectedCategory(null);
               setQuantity("1");
-              setUnit("unidades");
+              // unit eliminado
               setStorePurchased("");
             }
           },
@@ -217,30 +217,18 @@ export default function AddProductScreen({ navigation }) {
           </TouchableOpacity>
         </View>
 
-        {/* Cantidad y Unidad */}
-        <View style={styles.rowInputs}>
-          <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-            <Text style={styles.label}>Cantidad *</Text>
-            <TextInput
-              style={styles.textInput}
-              value={quantity}
-              onChangeText={setQuantity}
-              placeholder="1"
-              keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-
-          <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-            <Text style={styles.label}>Unidad</Text>
-            <TextInput
-              style={styles.textInput}
-              value={unit}
-              onChangeText={setUnit}
-              placeholder="kg, litros, unidades"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
+        {/* Cantidad - SIMPLIFICADO: solo unidades enteras */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Cantidad (unidades) *</Text>
+          <TextInput
+            style={styles.textInput}
+            value={quantity}
+            onChangeText={setQuantity}
+            placeholder="1"
+            keyboardType="number-pad"  // Solo números enteros
+            placeholderTextColor="#9ca3af"
+          />
+          <Text style={styles.unitHelper}>Siempre se cuenta en unidades enteras</Text>
         </View>
 
         {/* Tienda (opcional) */}
@@ -382,6 +370,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#065f46",
     lineHeight: 20,
+  },
+  unitHelper: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginTop: 4,
+    fontStyle: "italic",
   },
   footer: {
     padding: 16,

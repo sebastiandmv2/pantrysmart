@@ -17,8 +17,8 @@ CATEGORY_CONFIG = {
         "color": "#059669",
         "color_light": "#ecfdf5",
         "is_food": True,
-        "typical_shelf_life": 365,  # días
-        "default_unit": "kg",
+        "typical_shelf_life": None,  # Simplificado para POC
+        "default_unit": "unidades",  # SIEMPRE unidades
         "priority": 1
     },
     ProductCategory.LACTEOS: {
@@ -27,8 +27,8 @@ CATEGORY_CONFIG = {
         "color": "#0ea5e9",
         "color_light": "#e0f2fe",
         "is_food": True,
-        "typical_shelf_life": 7,
-        "default_unit": "litros",
+        "typical_shelf_life": None,  # Simplificado para POC
+        "default_unit": "unidades",  # SIEMPRE unidades
         "priority": 2
     },
     ProductCategory.CARNES: {
@@ -37,8 +37,8 @@ CATEGORY_CONFIG = {
         "color": "#dc2626",
         "color_light": "#fee2e2",
         "is_food": True,
-        "typical_shelf_life": 3,
-        "default_unit": "kg",
+        "typical_shelf_life": None,  # Simplificado para POC
+        "default_unit": "unidades",  # SIEMPRE unidades
         "priority": 3
     },
     ProductCategory.EMBUTIDOS: {
@@ -47,8 +47,8 @@ CATEGORY_CONFIG = {
         "color": "#b91c1c",
         "color_light": "#fef2f2",
         "is_food": True,
-        "typical_shelf_life": 14,
-        "default_unit": "kg",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 4
     },
     ProductCategory.PANADERIA: {
@@ -57,7 +57,7 @@ CATEGORY_CONFIG = {
         "color": "#d97706",
         "color_light": "#fef3c7",
         "is_food": True,
-        "typical_shelf_life": 2,
+        "typical_shelf_life": None,
         "default_unit": "unidades",
         "priority": 5
     },
@@ -67,8 +67,8 @@ CATEGORY_CONFIG = {
         "color": "#16a34a",
         "color_light": "#dcfce7",
         "is_food": True,
-        "typical_shelf_life": 5,
-        "default_unit": "kg",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 6
     },
     ProductCategory.FRUTAS: {
@@ -77,8 +77,8 @@ CATEGORY_CONFIG = {
         "color": "#10b981",
         "color_light": "#d1fae5",
         "is_food": True,
-        "typical_shelf_life": 7,
-        "default_unit": "kg",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 7
     },
     ProductCategory.CONGELADOS: {
@@ -87,8 +87,8 @@ CATEGORY_CONFIG = {
         "color": "#06b6d4",
         "color_light": "#cffafe",
         "is_food": True,
-        "typical_shelf_life": 90,
-        "default_unit": "kg",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 8
     },
     ProductCategory.DULCES: {
@@ -97,7 +97,7 @@ CATEGORY_CONFIG = {
         "color": "#ec4899",
         "color_light": "#fce7f3",
         "is_food": True,
-        "typical_shelf_life": 180,
+        "typical_shelf_life": None,
         "default_unit": "unidades",
         "priority": 9
     },
@@ -107,7 +107,7 @@ CATEGORY_CONFIG = {
         "color": "#f59e0b",
         "color_light": "#fef3c7",
         "is_food": True,
-        "typical_shelf_life": 120,
+        "typical_shelf_life": None,
         "default_unit": "unidades",
         "priority": 10
     },
@@ -117,8 +117,8 @@ CATEGORY_CONFIG = {
         "color": "#8b5cf6",
         "color_light": "#f3e8ff",
         "is_food": True,
-        "typical_shelf_life": 365,
-        "default_unit": "ml",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 11
     },
     ProductCategory.BEBESTIBLES: {
@@ -127,8 +127,8 @@ CATEGORY_CONFIG = {
         "color": "#06b6d4",
         "color_light": "#cffafe",
         "is_food": False,
-        "typical_shelf_life": 365,
-        "default_unit": "litros",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 12
     },
     ProductCategory.LIMPIEZA: {
@@ -138,7 +138,7 @@ CATEGORY_CONFIG = {
         "color_light": "#f9fafb",
         "is_food": False,
         "typical_shelf_life": None,
-        "default_unit": "ml",
+        "default_unit": "unidades",
         "priority": 13
     },
     ProductCategory.CUIDADO_PERSONAL: {
@@ -148,7 +148,7 @@ CATEGORY_CONFIG = {
         "color_light": "#f3f4f6",
         "is_food": False,
         "typical_shelf_life": None,
-        "default_unit": "ml",
+        "default_unit": "unidades",
         "priority": 14
     },
     ProductCategory.MASCOTAS: {
@@ -157,8 +157,8 @@ CATEGORY_CONFIG = {
         "color": "#84cc16",
         "color_light": "#f7fee7",
         "is_food": False,
-        "typical_shelf_life": 365,
-        "default_unit": "kg",
+        "typical_shelf_life": None,
+        "default_unit": "unidades",
         "priority": 15
     },
     ProductCategory.HOGAR: {
@@ -212,8 +212,8 @@ STOCK_LEVEL_CONFIG = {
 # REGLAS DE NEGOCIO
 # ===============================
 
-def get_stock_level(current_quantity: float, min_alert: float = 1.0) -> StockLevel:
-    """Determina el nivel de stock basado en la cantidad actual"""
+def get_stock_level(current_quantity: int, min_alert: int = 1) -> StockLevel:
+    """Determina el nivel de stock basado en la cantidad actual - SIMPLIFICADO: solo enteros"""
     if current_quantity <= 0:
         return StockLevel.AGOTADO
     elif current_quantity <= min_alert:
@@ -257,9 +257,8 @@ def get_default_shelf_life(category: ProductCategory) -> Optional[int]:
     return config.get("typical_shelf_life")
 
 def get_default_unit(category: ProductCategory) -> str:
-    """Obtiene la unidad por defecto para una categoría"""
-    config = CATEGORY_CONFIG.get(category, {})
-    return config.get("default_unit", "unidades")
+    """Obtiene la unidad por defecto para una categoría - SIMPLIFICADO: siempre unidades"""
+    return "unidades"  # SIEMPRE unidades para POC
 
 # ===============================
 # UTILIDADES PARA FRONTEND
