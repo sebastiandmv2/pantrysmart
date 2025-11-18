@@ -46,7 +46,7 @@ def calculate_recipe_availability(recipe: Recipe, user_id: str, db: Session) -> 
             recipe_id=ingredient.recipe_id,
             product_id=ingredient.product_id,
             quantity_needed=ingredient.quantity_needed,
-            unit=ingredient.unit,
+            unit="unidades",  # SIEMPRE unidades para consistencia
             is_optional=ingredient.is_optional,
             notes=ingredient.notes,
             product=ingredient.product,

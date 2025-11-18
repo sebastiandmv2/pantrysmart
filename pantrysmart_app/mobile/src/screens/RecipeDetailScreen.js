@@ -9,6 +9,7 @@ import {
   Alert,
   Image,
 } from "react-native";
+import { apiService } from "../services/apiService";
 import { useRecipeDetail } from "../hooks/useRecipes";
 
 // Mock user ID - en una app real vendría del contexto de autenticación
@@ -31,6 +32,7 @@ const RECIPE_IMAGES = {
 export default function RecipeDetailScreen({ route, navigation }) {
   const { recipeId, recipeName } = route.params;
   const { recipe, loading, error, loadRecipeDetail } = useRecipeDetail();
+  const [temporaryAvailable, setTemporaryAvailable] = useState(new Set()); // IDs de ingredientes marcados como disponibles
 
   useEffect(() => {
     if (recipeId) {
@@ -75,9 +77,141 @@ export default function RecipeDetailScreen({ route, navigation }) {
     return `${total} min`;
   };
 
+  // Función para marcar/desmarcar ingrediente como temporalmente disponible
+  const toggleTemporaryAvailable = (ingredientId) => {
+    setTemporaryAvailable(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(ingredientId)) {
+        newSet.delete(ingredientId);
+      } else {
+        newSet.add(ingredientId);
+      }
+      return newSet;
+    });
+  };
+
+  // Función para verificar si un ingrediente está disponible (real o temporal)
+  const isIngredientAvailable = (ingredient) => {
+    return ingredient.has_enough || temporaryAvailable.has(ingredient.id);
+  };
+
+  // Calcular disponibilidad actualizada considerando ingredientes temporales
+  const getUpdatedAvailability = () => {
+    if (!recipe) return { percentage: 0, canMake: false };
+    
+    const allIngredients = [...recipe.available_ingredients, ...recipe.missing_ingredients];
+    const nonOptionalIngredients = allIngredients.filter(ing => !ing.is_optional);
+    
+    if (nonOptionalIngredients.length === 0) return { percentage: 100, canMake: true };
+    
+    const availableCount = nonOptionalIngredients.filter(ing => isIngredientAvailable(ing)).length;
+    const percentage = (availableCount / nonOptionalIngredients.length) * 100;
+    const canMake = availableCount === nonOptionalIngredients.length;
+    
+    return { percentage: Math.round(percentage), canMake };
+  };
+
+  // Función para comenzar a cocinar (consumir ingredientes)
+  const startCooking = async () => {
+    try {
+      const allIngredients = [...recipe.available_ingredients, ...recipe.missing_ingredients];
+      const ingredientsToConsume = allIngredients.filter(ing => 
+        !ing.is_optional && isIngredientAvailable(ing)
+      );
+
+      Alert.alert(
+        "🍳 Comenzar a cocinar",
+        `Esto consumirá los siguientes ingredientes de tu inventario:\n\n${ingredientsToConsume.map(ing => 
+          `• ${ing.product.name}: ${ing.quantity_needed} unidades`
+        ).join('\n')}\n\n¿Continuar?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { 
+            text: "¡Sí, cocinar!", 
+            onPress: async () => {
+              await consumeIngredients(ingredientsToConsume);
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      Alert.alert("Error", "No se pudo iniciar la cocina");
+    }
+  };
+
+  // Función para consumir ingredientes del inventario
+  const consumeIngredients = async (ingredients) => {
+    try {
+      let consumedCount = 0;
+      let errors = [];
+
+      for (const ingredient of ingredients) {
+        try {
+          // Solo consumir si tiene cantidad real en inventario (no marcados temporalmente)
+          if (ingredient.has_enough) {
+            // Buscar el item en el inventario para obtener su ID
+            const inventoryItems = await apiService.inventory.getItems(MOCK_USER_ID);
+            const inventoryItem = inventoryItems.find(item => 
+              item.product?.name === ingredient.product.name
+            );
+
+            if (inventoryItem) {
+              await apiService.inventory.consumeItem(
+                inventoryItem.id, 
+                ingredient.quantity_needed,
+                `Usado en receta: ${recipe.name}`
+              );
+              consumedCount++;
+            }
+          }
+        } catch (error) {
+          console.error(`Error consuming ${ingredient.product.name}:`, error);
+          errors.push(ingredient.product.name);
+        }
+      }
+
+      // Mostrar resultado
+      if (errors.length === 0) {
+        Alert.alert(
+          "🎉 ¡Receta completada!",
+          `Se consumieron ${consumedCount} ingredientes de tu inventario.\n\n¡Que disfrutes tu ${recipe.name}!`,
+          [
+            { 
+              text: "¡Genial!", 
+              onPress: () => {
+                // Resetear estado temporal y volver
+                setTemporaryAvailable(new Set());
+                navigation.goBack();
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert(
+          "⚠️ Parcialmente completado",
+          `Se consumieron ${consumedCount} ingredientes.\n\nNo se pudieron consumir: ${errors.join(', ')}\n\n¡Aún puedes disfrutar tu ${recipe.name}!`,
+          [
+            { 
+              text: "Entendido", 
+              onPress: () => {
+                setTemporaryAvailable(new Set());
+                navigation.goBack();
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error in consumeIngredients:', error);
+      Alert.alert("Error", "Hubo un problema consumiendo los ingredientes");
+    }
+  };
+
   const renderIngredientItem = (ingredient, index) => {
     const hasEnough = ingredient.has_enough;
     const isOptional = ingredient.is_optional;
+    const isTemporaryAvailable = temporaryAvailable.has(ingredient.id);
+    const isActuallyAvailable = hasEnough || isTemporaryAvailable;
     
     return (
       <View key={index} style={styles.ingredientItem}>
@@ -85,29 +219,30 @@ export default function RecipeDetailScreen({ route, navigation }) {
           <View style={[
             styles.ingredientStatus, 
             { 
-              backgroundColor: hasEnough ? '#dcfce7' : '#fef2f2',
-              borderColor: hasEnough ? '#10b981' : '#ef4444',
+              backgroundColor: isActuallyAvailable ? '#dcfce7' : '#fef2f2',
+              borderColor: isActuallyAvailable ? '#10b981' : '#ef4444',
             }
           ]}>
             <Text style={[
               styles.ingredientStatusText,
-              { color: hasEnough ? '#10b981' : '#ef4444' }
+              { color: isActuallyAvailable ? '#10b981' : '#ef4444' }
             ]}>
-              {hasEnough ? '✓' : '✗'}
+              {isActuallyAvailable ? '✓' : '✗'}
             </Text>
           </View>
           
           <View style={styles.ingredientInfo}>
             <Text style={[
               styles.ingredientName,
-              { textDecorationLine: hasEnough ? 'none' : 'line-through' }
+              { textDecorationLine: isActuallyAvailable ? 'none' : 'line-through' }
             ]}>
               {ingredient.product.name}
               {isOptional && <Text style={styles.optionalText}> (opcional)</Text>}
+              {isTemporaryAvailable && <Text style={styles.temporaryText}> (marcado)</Text>}
             </Text>
             
             <Text style={styles.ingredientQuantity}>
-              {ingredient.quantity_needed} {ingredient.unit}
+              {ingredient.quantity_needed} unidades
             </Text>
             
             {ingredient.notes && (
@@ -118,7 +253,7 @@ export default function RecipeDetailScreen({ route, navigation }) {
         
         <View style={styles.availabilityInfo}>
           <Text style={styles.availabilityText}>
-            Tienes: {ingredient.available_quantity} {ingredient.unit}
+            Tienes: {ingredient.available_quantity} unidades
           </Text>
           <View style={styles.availabilityBar}>
             <View 
@@ -132,6 +267,26 @@ export default function RecipeDetailScreen({ route, navigation }) {
             />
           </View>
         </View>
+
+        {/* Botón de acción para ingredientes faltantes */}
+        {!hasEnough && (
+          <View style={styles.ingredientActions}>
+            <TouchableOpacity
+              style={[
+                styles.temporaryButton,
+                isTemporaryAvailable && styles.temporaryButtonActive
+              ]}
+              onPress={() => toggleTemporaryAvailable(ingredient.id)}
+            >
+              <Text style={[
+                styles.temporaryButtonText,
+                isTemporaryAvailable && styles.temporaryButtonTextActive
+              ]}>
+                {isTemporaryAvailable ? '✓ Ya lo tengo' : '✓ Marcar como disponible'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     );
   };
@@ -219,26 +374,28 @@ export default function RecipeDetailScreen({ route, navigation }) {
         {/* Disponibilidad general */}
         <View style={styles.availabilitySection}>
           <Text style={styles.sectionTitle}>
-            Disponibilidad: {recipe.availability_percentage}%
+            Disponibilidad: {getUpdatedAvailability().percentage}%
           </Text>
           <View style={styles.progressBackground}>
             <View
               style={[
                 styles.progressBar,
                 { 
-                  width: `${recipe.availability_percentage}%`,
-                  backgroundColor: recipe.availability_percentage >= 80 ? '#10b981' : 
-                                 recipe.availability_percentage >= 50 ? '#f59e0b' : '#ef4444'
+                  width: `${getUpdatedAvailability().percentage}%`,
+                  backgroundColor: getUpdatedAvailability().percentage >= 80 ? '#10b981' : 
+                                 getUpdatedAvailability().percentage >= 50 ? '#f59e0b' : '#ef4444'
                 }
               ]}
             />
           </View>
           <Text style={[
             styles.canMakeText,
-            { color: recipe.can_make ? '#10b981' : '#ef4444' }
+            { color: getUpdatedAvailability().canMake ? '#10b981' : '#ef4444' }
           ]}>
-            {recipe.can_make ? '✓ Puedes hacer esta receta' : '✗ Te faltan ingredientes'}
+            {getUpdatedAvailability().canMake ? '✓ Puedes hacer esta receta' : '✗ Te faltan ingredientes'}
           </Text>
+          
+
         </View>
       </View>
 
@@ -279,16 +436,23 @@ export default function RecipeDetailScreen({ route, navigation }) {
           style={[
             styles.actionButton,
             { 
-              backgroundColor: recipe.can_make ? '#10b981' : '#6b7280',
-              opacity: recipe.can_make ? 1 : 0.7
+              backgroundColor: getUpdatedAvailability().canMake ? '#10b981' : '#6b7280',
+              opacity: getUpdatedAvailability().canMake ? 1 : 0.7
             }
           ]}
-          disabled={!recipe.can_make}
+          disabled={!getUpdatedAvailability().canMake}
+          onPress={() => {
+            if (getUpdatedAvailability().canMake) {
+              startCooking();
+            }
+          }}
         >
           <Text style={styles.actionButtonText}>
-            {recipe.can_make ? 'Comenzar a cocinar' : 'Faltan ingredientes'}
+            {getUpdatedAvailability().canMake ? 'Comenzar a cocinar' : 'Faltan ingredientes'}
           </Text>
         </TouchableOpacity>
+        
+
       </View>
     </ScrollView>
   );
@@ -523,6 +687,40 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: "#fff",
     fontSize: 16,
+    fontWeight: "600",
+  },
+  
+  // Estilos para funcionalidad temporal
+  temporaryText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#8b5cf6",
+    fontStyle: "italic",
+  },
+  ingredientActions: {
+    marginTop: 12,
+    marginLeft: 36,
+  },
+  temporaryButton: {
+    backgroundColor: "#f3f4f6",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  temporaryButtonActive: {
+    backgroundColor: "#ede9fe",
+    borderColor: "#8b5cf6",
+  },
+  temporaryButtonText: {
+    fontSize: 12,
+    color: "#374151",
+    fontWeight: "500",
+    textAlign: "center",
+  },
+  temporaryButtonTextActive: {
+    color: "#8b5cf6",
     fontWeight: "600",
   },
 });

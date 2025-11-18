@@ -46,8 +46,8 @@ const PRODUCT_TYPE_ICONS = {
   'Carne': 'food-steak',
   'Atún': 'fish',
   'Lechuga': 'leaf',
-  'Tomate': 'tomato',
-  'Cebolla': 'onion',
+  'Tomate': 'fruit-watermelon', // Cambiar tomato por fruit-watermelon
+  'Cebolla': 'circle-outline', // Cambiar onion por circle-outline
   'Zanahoria': 'carrot',
   'Papa': 'potato',
   'Manzana': 'apple',
@@ -77,6 +77,7 @@ export default function InventoryScreen({ navigation, route }) {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categories, setCategories] = useState([]);
   const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
+  const [updatingItems, setUpdatingItems] = useState(new Set()); // Para mostrar loading en botones
 
   // Cargar datos del inventario
   const loadInventoryData = async () => {
@@ -178,25 +179,179 @@ export default function InventoryScreen({ navigation, route }) {
     return '#2f7d36';
   };
 
+  // Función para actualizar cantidad de producto
+  const updateProductQuantity = async (item, change) => {
+    const itemKey = `${item.id}-${change}`;
+    
+    try {
+      // Marcar como actualizando
+      setUpdatingItems(prev => new Set([...prev, itemKey]));
+      
+      const newQuantity = Math.max(0, item.current_quantity + change);
+      
+      if (newQuantity === 0) {
+        // Si la cantidad llega a 0, preguntar si eliminar
+        Alert.alert(
+          "Eliminar producto",
+          `¿Estás seguro de que quieres eliminar ${item.product?.name} del inventario?`,
+          [
+            { 
+              text: "Cancelar", 
+              style: "cancel",
+              onPress: () => {
+                setUpdatingItems(prev => {
+                  const newSet = new Set(prev);
+                  newSet.delete(itemKey);
+                  return newSet;
+                });
+              }
+            },
+            { 
+              text: "Eliminar", 
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await apiService.inventory.deleteItem(item.id);
+                  await loadInventoryData(); // Recargar datos
+                } catch (error) {
+                  Alert.alert("Error", "No se pudo eliminar el producto");
+                } finally {
+                  setUpdatingItems(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(itemKey);
+                    return newSet;
+                  });
+                }
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // Actualizar cantidad
+      await apiService.inventory.updateItem(item.id, {
+        current_quantity: newQuantity
+      });
+      
+      // Recargar datos
+      await loadInventoryData();
+      
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      Alert.alert("Error", "No se pudo actualizar la cantidad");
+    } finally {
+      // Quitar del estado de actualizando
+      setUpdatingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemKey);
+        return newSet;
+      });
+    }
+  };
+
+  // Función para actualizar cantidad de producto agrupado
+  const updateGroupedQuantity = async (groupedItem, change) => {
+    const itemKey = `${groupedItem.product_type}-${change}`;
+    
+    try {
+      // Marcar como actualizando
+      setUpdatingItems(prev => new Set([...prev, itemKey]));
+      
+      // Para productos agrupados, necesitamos encontrar el item real
+      const detailedItems = await apiService.inventory.getItems(DEMO_USER_ID);
+      const matchingItem = detailedItems.find(item => 
+        item.product?.name === groupedItem.product_type
+      );
+      
+      if (matchingItem) {
+        // Usar la función original pero sin el estado de loading duplicado
+        const newQuantity = Math.max(0, matchingItem.current_quantity + change);
+        
+        if (newQuantity === 0) {
+          Alert.alert(
+            "Eliminar producto",
+            `¿Estás seguro de que quieres eliminar ${matchingItem.product?.name} del inventario?`,
+            [
+              { 
+                text: "Cancelar", 
+                style: "cancel",
+                onPress: () => {
+                  setUpdatingItems(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(itemKey);
+                    return newSet;
+                  });
+                }
+              },
+              { 
+                text: "Eliminar", 
+                style: "destructive",
+                onPress: async () => {
+                  try {
+                    await apiService.inventory.deleteItem(matchingItem.id);
+                    await loadInventoryData();
+                  } catch (error) {
+                    Alert.alert("Error", "No se pudo eliminar el producto");
+                  } finally {
+                    setUpdatingItems(prev => {
+                      const newSet = new Set(prev);
+                      newSet.delete(itemKey);
+                      return newSet;
+                    });
+                  }
+                }
+              }
+            ]
+          );
+          return;
+        }
+
+        await apiService.inventory.updateItem(matchingItem.id, {
+          current_quantity: newQuantity
+        });
+        
+        await loadInventoryData();
+      }
+    } catch (error) {
+      console.error('Error updating grouped quantity:', error);
+      Alert.alert("Error", "No se pudo actualizar la cantidad");
+    } finally {
+      setUpdatingItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(itemKey);
+        return newSet;
+      });
+    }
+  };
+
   // Función para obtener datos ordenados según el filtro alfabético
   const getSortedData = () => {
     if (viewMode === 'categories') {
       if (sortOrder === 'asc') {
-        return [...categories].sort((a, b) => a.name.localeCompare(b.name));
+        return [...categories].sort((a, b) => {
+          const nameA = a.name || '';
+          const nameB = b.name || '';
+          return nameA.localeCompare(nameB);
+        });
       } else {
-        return [...categories].sort((a, b) => b.name.localeCompare(a.name));
+        return [...categories].sort((a, b) => {
+          const nameA = a.name || '';
+          const nameB = b.name || '';
+          return nameB.localeCompare(nameA);
+        });
       }
     } else {
       if (sortOrder === 'asc') {
         return [...groupedInventory].sort((a, b) => {
-          const nameA = viewMode === 'grouped' ? a.product_type : a.product?.name;
-          const nameB = viewMode === 'grouped' ? b.product_type : b.product?.name;
+          const nameA = (viewMode === 'grouped' ? a.product_type : a.product?.name) || '';
+          const nameB = (viewMode === 'grouped' ? b.product_type : b.product?.name) || '';
           return nameA.localeCompare(nameB);
         });
       } else {
         return [...groupedInventory].sort((a, b) => {
-          const nameA = viewMode === 'grouped' ? a.product_type : a.product?.name;
-          const nameB = viewMode === 'grouped' ? b.product_type : b.product?.name;
+          const nameA = (viewMode === 'grouped' ? a.product_type : a.product?.name) || '';
+          const nameB = (viewMode === 'grouped' ? b.product_type : b.product?.name) || '';
           return nameB.localeCompare(nameA);
         });
       }
@@ -206,20 +361,7 @@ export default function InventoryScreen({ navigation, route }) {
 
 
   const renderGroupedItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.inventoryCard}
-      onPress={() => {
-        // TODO: Navegar a detalle del producto
-        Alert.alert(
-          item.product_type,
-          `${item.items_count} tipo(s) diferentes\nTotal: ${item.total_quantity} ${item.unit}`,
-          [
-            { text: "Ver detalles", onPress: () => console.log('Ver detalles:', item) },
-            { text: "Cerrar", style: "cancel" }
-          ]
-        );
-      }}
-    >
+    <View style={styles.inventoryCard}>
       <View style={styles.cardHeader}>
         <View style={styles.productInfo}>
           <View style={[styles.productIcon, { backgroundColor: getProductColor() + '20' }]}>
@@ -248,13 +390,46 @@ export default function InventoryScreen({ navigation, route }) {
           )}
         </View>
         
-
+        {/* Botones +/- para productos agrupados */}
+        <View style={styles.quantityControls}>
+          <TouchableOpacity 
+            style={[
+              styles.quantityButton,
+              updatingItems.has(`${item.product_type}--1`) && styles.quantityButtonDisabled
+            ]}
+            onPress={() => updateGroupedQuantity(item, -1)}
+            disabled={updatingItems.has(`${item.product_type}--1`)}
+          >
+            {updatingItems.has(`${item.product_type}--1`) ? (
+              <ActivityIndicator size="small" color="#dc2626" />
+            ) : (
+              <MaterialCommunityIcons name="minus" size={20} color="#dc2626" />
+            )}
+          </TouchableOpacity>
+          
+          <Text style={styles.quantityControlText}>{item.total_quantity}</Text>
+          
+          <TouchableOpacity 
+            style={[
+              styles.quantityButton,
+              updatingItems.has(`${item.product_type}-1`) && styles.quantityButtonDisabled
+            ]}
+            onPress={() => updateGroupedQuantity(item, 1)}
+            disabled={updatingItems.has(`${item.product_type}-1`)}
+          >
+            {updatingItems.has(`${item.product_type}-1`) ? (
+              <ActivityIndicator size="small" color="#16a34a" />
+            ) : (
+              <MaterialCommunityIcons name="plus" size={20} color="#16a34a" />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderDetailedItem = ({ item }) => (
-    <TouchableOpacity style={styles.inventoryCard}>
+    <View style={styles.inventoryCard}>
       <View style={styles.cardHeader}>
         <View style={styles.productInfo}>
           <View style={[styles.productIcon, { backgroundColor: getProductColor() + '20' }]}>
@@ -283,9 +458,42 @@ export default function InventoryScreen({ navigation, route }) {
           )}
         </View>
         
-
+        {/* Botones +/- para productos detallados */}
+        <View style={styles.quantityControls}>
+          <TouchableOpacity 
+            style={[
+              styles.quantityButton,
+              updatingItems.has(`${item.id}--1`) && styles.quantityButtonDisabled
+            ]}
+            onPress={() => updateProductQuantity(item, -1)}
+            disabled={updatingItems.has(`${item.id}--1`)}
+          >
+            {updatingItems.has(`${item.id}--1`) ? (
+              <ActivityIndicator size="small" color="#dc2626" />
+            ) : (
+              <MaterialCommunityIcons name="minus" size={20} color="#dc2626" />
+            )}
+          </TouchableOpacity>
+          
+          <Text style={styles.quantityControlText}>{Math.floor(item.current_quantity)}</Text>
+          
+          <TouchableOpacity 
+            style={[
+              styles.quantityButton,
+              updatingItems.has(`${item.id}-1`) && styles.quantityButtonDisabled
+            ]}
+            onPress={() => updateProductQuantity(item, 1)}
+            disabled={updatingItems.has(`${item.id}-1`)}
+          >
+            {updatingItems.has(`${item.id}-1`) ? (
+              <ActivityIndicator size="small" color="#16a34a" />
+            ) : (
+              <MaterialCommunityIcons name="plus" size={20} color="#16a34a" />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 
   const renderCategoryItem = ({ item }) => (
@@ -776,5 +984,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#2f7d36",
     fontWeight: "600",
+  },
+  
+  // Estilos para controles de cantidad
+  quantityControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+    gap: 8,
+  },
+  quantityButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  quantityButtonDisabled: {
+    opacity: 0.6,
+    backgroundColor: "#f3f4f6",
+  },
+  quantityControlText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111",
+    minWidth: 30,
+    textAlign: "center",
   },
 });
