@@ -580,6 +580,114 @@ export const apiService = {
       },
     }
   },
+
+  // Recipes endpoints
+  recipes: {
+    // Obtener lista de recetas con disponibilidad
+    getRecipes: async (userId, options = {}) => {
+      const params = new URLSearchParams({ user_id: userId });
+      if (options.skip) params.append('skip', options.skip.toString());
+      if (options.limit) params.append('limit', options.limit.toString());
+      if (options.difficulty) params.append('difficulty', options.difficulty);
+      if (options.search) params.append('search', options.search);
+
+      const response = await fetch(`${config.API_URL}/recipes/?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Recipes API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Obtener detalle de una receta con disponibilidad
+    getRecipeDetail: async (recipeId, userId) => {
+      const params = new URLSearchParams({ user_id: userId });
+
+      const response = await fetch(`${config.API_URL}/recipes/${recipeId}?${params.toString()}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Recipe Detail API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Crear nueva receta
+    createRecipe: async (recipeData) => {
+      const response = await fetch(`${config.API_URL}/recipes/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(recipeData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Create Recipe API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Actualizar receta
+    updateRecipe: async (recipeId, updateData) => {
+      const response = await fetch(`${config.API_URL}/recipes/${recipeId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Update Recipe API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+
+    // Eliminar receta
+    deleteRecipe: async (recipeId) => {
+      const response = await fetch(`${config.API_URL}/recipes/${recipeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Delete Recipe API Error:', response.status, errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    },
+  },
 };
 
 export default apiService;

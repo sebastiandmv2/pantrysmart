@@ -17,6 +17,7 @@ import ReceiptDetailScreen from "../screens/ReceiptDetailScreen";
 import ReceiptConfirmScreen from "../screens/ReceiptConfirmScreen";
 import AddProductScreen from "../screens/AddProductScreen";
 import InventoryScreen from "../screens/InventoryScreen";
+import RecipeDetailScreen from "../screens/RecipeDetailScreen";
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -146,6 +147,7 @@ export default function RootNavigator() {
       <Stack.Screen name="Receipts" component={ReceiptsScreen} options={{ title: "Mis boletas" }} />
       <Stack.Screen name="ReceiptConfirm" component={ReceiptConfirmScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReceiptDetail" component={ReceiptDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} options={{ title: "Detalle de receta" }} />
     </Stack.Navigator>
   );
 }

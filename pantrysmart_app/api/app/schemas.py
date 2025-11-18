@@ -245,3 +245,100 @@ class BulkAddInventoryItems(BaseModel):
     """Schema para agregar múltiples productos al inventario"""
     user_id: str = Field(..., max_length=100)
     items: List[QuickAddInventoryItem] = Field(..., min_items=1, max_items=50)
+
+
+# ===============================
+# RECIPE SCHEMAS
+# ===============================
+
+class DifficultyLevelEnum(str, Enum):
+    """Niveles de dificultad de recetas"""
+    FACIL = "facil"
+    INTERMEDIO = "intermedio"
+    DIFICIL = "dificil"
+
+class RecipeIngredientBase(BaseModel):
+    product_id: int
+    quantity_needed: confloat(gt=0.0)
+    unit: str = Field(..., max_length=50)
+    is_optional: bool = False
+    notes: Optional[str] = Field(None, max_length=255)
+
+class RecipeIngredientCreate(RecipeIngredientBase):
+    pass
+
+class RecipeIngredientOut(RecipeIngredientBase):
+    id: int
+    recipe_id: int
+    product: ProductOut
+    
+    class Config:
+        from_attributes = True
+
+class RecipeIngredientWithAvailability(RecipeIngredientOut):
+    """Ingrediente con información de disponibilidad en inventario"""
+    available_quantity: float
+    has_enough: bool
+    availability_percentage: float
+
+class RecipeBase(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    difficulty: DifficultyLevelEnum = DifficultyLevelEnum.FACIL
+    prep_time_minutes: int = Field(..., ge=1)
+    cook_time_minutes: Optional[int] = Field(None, ge=0)
+    servings: int = Field(..., ge=1)
+    instructions: str = Field(..., min_length=10)
+    image_url: Optional[str] = Field(None, max_length=500)
+    tags: Optional[str] = Field(None, max_length=500)
+
+class RecipeCreate(RecipeBase):
+    ingredients: List[RecipeIngredientCreate] = Field(..., min_items=1)
+
+class RecipeUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    difficulty: Optional[DifficultyLevelEnum] = None
+    prep_time_minutes: Optional[int] = Field(None, ge=1)
+    cook_time_minutes: Optional[int] = Field(None, ge=0)
+    servings: Optional[int] = Field(None, ge=1)
+    instructions: Optional[str] = Field(None, min_length=10)
+    image_url: Optional[str] = Field(None, max_length=500)
+    tags: Optional[str] = Field(None, max_length=500)
+    ingredients: Optional[List[RecipeIngredientCreate]] = None
+
+class RecipeOut(RecipeBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    is_active: bool
+    ingredients: List[RecipeIngredientOut]
+    
+    class Config:
+        from_attributes = True
+
+class RecipeWithAvailability(RecipeOut):
+    """Receta con información de disponibilidad de ingredientes"""
+    availability_percentage: float
+    missing_ingredients: List[RecipeIngredientWithAvailability]
+    available_ingredients: List[RecipeIngredientWithAvailability]
+    can_make: bool
+
+class RecipeListItem(BaseModel):
+    """Versión simplificada de receta para listados"""
+    id: int
+    name: str
+    description: Optional[str]
+    difficulty: DifficultyLevelEnum
+    prep_time_minutes: int
+    cook_time_minutes: Optional[int]
+    servings: int
+    image_url: Optional[str]
+    tags: Optional[str]
+    availability_percentage: float
+    ingredient_count: int
+    
+    class Config:
+        from_attributes = True
+
+

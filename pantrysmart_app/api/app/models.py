@@ -83,6 +83,7 @@ class Product(Base):
     # Relaciones
     inventory_items = relationship("UserInventory", back_populates="product")
     movements = relationship("InventoryMovement", back_populates="product")
+    recipe_ingredients = relationship("RecipeIngredient")
 
 class UserInventory(Base):
     """Inventario personal de cada usuario"""
@@ -153,3 +154,55 @@ class InventoryMovement(Base):
     # Relaciones
     product = relationship("Product", back_populates="movements")
     inventory_item = relationship("UserInventory", back_populates="movements")
+
+
+# ===============================
+# MODELOS DE RECETAS
+# ===============================
+
+class DifficultyLevel(enum.Enum):
+    """Niveles de dificultad de recetas"""
+    FACIL = "facil"
+    INTERMEDIO = "intermedio"
+    DIFICIL = "dificil"
+
+class Recipe(Base):
+    """Recetas guardadas en el sistema"""
+    __tablename__ = "recipes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    description = Column(Text, nullable=True)
+    difficulty = Column(Enum(DifficultyLevel), nullable=False, default=DifficultyLevel.FACIL)
+    prep_time_minutes = Column(Integer, nullable=False)  # Tiempo de preparación en minutos
+    cook_time_minutes = Column(Integer, nullable=True)   # Tiempo de cocción en minutos
+    servings = Column(Integer, nullable=False, default=1)  # Número de porciones
+    instructions = Column(Text, nullable=False)  # Instrucciones paso a paso
+    image_url = Column(String(500), nullable=True)  # URL de imagen de la receta
+    tags = Column(String(500), nullable=True)  # Tags separados por comas (ej: "vegetariano,facil,rapido")
+    
+    # Metadatos
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    
+    # Relaciones
+    ingredients = relationship("RecipeIngredient", back_populates="recipe", cascade="all, delete-orphan")
+
+class RecipeIngredient(Base):
+    """Ingredientes necesarios para cada receta"""
+    __tablename__ = "recipe_ingredients"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    
+    # Información del ingrediente
+    quantity_needed = Column(Float, nullable=False)  # Cantidad necesaria
+    unit = Column(String(50), nullable=False)  # Unidad (kg, litros, unidades, etc.)
+    is_optional = Column(Boolean, default=False, nullable=False)  # Si el ingrediente es opcional
+    notes = Column(String(255), nullable=True)  # Notas adicionales (ej: "cortado en cubos")
+    
+    # Relaciones
+    recipe = relationship("Recipe", back_populates="ingredients")
+    product = relationship("Product")
