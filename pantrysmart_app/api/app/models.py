@@ -206,3 +206,52 @@ class RecipeIngredient(Base):
     # Relaciones
     recipe = relationship("Recipe", back_populates="ingredients")
     product = relationship("Product")
+
+
+# ===============================
+# MODELOS DE LISTA DE COMPRAS
+# ===============================
+
+class ShoppingListItemStatus(enum.Enum):
+    """Estados de items en lista de compras"""
+    PENDING = "pending"      # Pendiente de comprar
+    PURCHASED = "purchased"  # Comprado
+    CANCELLED = "cancelled"  # Cancelado
+
+class ShoppingListItem(Base):
+    """Items en la lista de compras del usuario"""
+    __tablename__ = "shopping_list_items"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, index=True)  # ID del usuario
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
+    
+    # Información del item
+    quantity_needed = Column(Integer, nullable=False)  # Cantidad necesaria (enteros)
+    unit = Column(String(50), nullable=False, default="unidades")  # Siempre unidades
+    status = Column(Enum(ShoppingListItemStatus), nullable=False, default=ShoppingListItemStatus.PENDING)
+    
+    # Información contextual
+    added_from_recipe_id = Column(Integer, ForeignKey("recipes.id", ondelete="SET NULL"), nullable=True)  # Si viene de una receta
+    added_from_recipe_name = Column(String(255), nullable=True)  # Nombre de la receta (por si se borra)
+    notes = Column(String(500), nullable=True)  # Notas adicionales
+    priority = Column(Integer, nullable=False, default=1)  # Prioridad (1=alta, 2=media, 3=baja)
+    
+    # Información de compra
+    estimated_price = Column(Float, nullable=True)  # Precio estimado
+    actual_price = Column(Float, nullable=True)  # Precio real al comprar
+    store_to_buy = Column(String(255), nullable=True)  # Tienda preferida para comprar
+    purchased_date = Column(DateTime, nullable=True)  # Fecha de compra
+    
+    # Metadatos
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    
+    # Relaciones
+    product = relationship("Product")
+    recipe = relationship("Recipe", foreign_keys=[added_from_recipe_id])
+    
+    # Índice compuesto para evitar duplicados por usuario-producto
+    __table_args__ = (
+        {"mysql_engine": "InnoDB"},
+    )

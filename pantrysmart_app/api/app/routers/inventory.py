@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from app.db import get_db
-from app.models import Product, UserInventory, InventoryMovement, ProductCategory, StockLevel
+from app.models import Product, UserInventory, InventoryMovement, ProductCategory, StockLevel, MovementType
 from app.schemas import (
     ProductOut, UserInventoryOut, UserInventoryCreate, UserInventoryUpdate,
     InventoryMovementOut, UserInventorySummary, QuickAddInventoryItem,
@@ -229,6 +229,76 @@ def add_inventory_item(
         logger.info(f"Producto agregado al inventario: {item.product_name} para usuario {user_id}")
         return inventory_item
         
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error agregando producto al inventario: {e}")
+        raise HTTPException(status_code=500, detail=f"Error agregando producto: {str(e)}")
+
+@router.post("/inventory/add", response_model=UserInventoryOut, tags=["inventory"])
+def add_item_to_inventory_simple(
+    request: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Agregar un producto específico al inventario del usuario (desde lista de compras)
+    """
+    try:
+        user_id = request.get("user_id")
+        product_id = request.get("product_id")
+        quantity = request.get("quantity", 1)
+        unit = request.get("unit", "unidades")
+        
+        if not user_id or not product_id:
+            raise HTTPException(status_code=400, detail="user_id y product_id son requeridos")
+        
+        # Verificar que el producto existe
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+        
+        # Buscar si ya existe en el inventario
+        existing_item = db.query(UserInventory).filter(
+            UserInventory.user_id == user_id,
+            UserInventory.product_id == product_id
+        ).first()
+        
+        if existing_item:
+            # Si existe, incrementar cantidad
+            existing_item.current_quantity += quantity
+            inventory_item = existing_item
+        else:
+            # Si no existe, crear nuevo
+            inventory_item = UserInventory(
+                user_id=user_id,
+                product_id=product_id,
+                current_quantity=quantity,
+                unit=unit,
+                stock_level=StockLevel.MEDIO
+            )
+            db.add(inventory_item)
+        
+        # Crear movimiento
+        movement = InventoryMovement(
+            user_id=user_id,
+            product_id=product_id,
+            inventory_item_id=inventory_item.id if existing_item else None,
+            movement_type=MovementType.ADDED_MANUAL,
+            quantity_change=quantity,
+            quantity_before=existing_item.current_quantity - quantity if existing_item else 0,
+            quantity_after=existing_item.current_quantity if existing_item else quantity,
+            unit=unit,
+            reason="Agregado desde lista de compras"
+        )
+        db.add(movement)
+        
+        db.commit()
+        db.refresh(inventory_item)
+        
+        logger.info(f"Producto {product.name} agregado al inventario de {user_id}")
+        return inventory_item
+        
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         logger.error(f"Error agregando producto al inventario: {e}")

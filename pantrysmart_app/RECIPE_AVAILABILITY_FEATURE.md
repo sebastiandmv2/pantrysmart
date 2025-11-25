@@ -1,4 +1,4 @@
-Tambie# 🍳 FUNCIONALIDAD: "MARCAR COMO DISPONIBLE"
+# 🍳 FUNCIONALIDAD: "MARCAR COMO DISPONIBLE"
 
 ## 🎯 PROBLEMA RESUELTO
 
@@ -118,7 +118,6 @@ const [temporaryAvailable, setTemporaryAvailable] = useState(new Set());
 
 ### **Botones**
 - **Marcar como disponible**: Fondo gris → Púrpura cuando activo
-- **Agregar al inventario**: Verde con borde
 - **Resetear marcas**: Gris con borde punteado
 
 ## ✅ BENEFICIOS

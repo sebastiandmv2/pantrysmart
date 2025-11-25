@@ -148,22 +148,14 @@ export default function ScanScreen({ navigation }) {
   return (
     <View style={styles.cameraContainer}>
       <CameraView ref={cameraRef} style={styles.camera} facing="back" />
-      
-      {/* Overlay con guías visuales */}
-      <View style={styles.overlay}>
-        <View style={styles.topOverlay}>
-          <Text style={styles.instructionText}>Centra la boleta en el marco</Text>
-        </View>
-        
-        <View style={styles.scanFrame}>
-          <View style={styles.corner} />
-          <View style={[styles.corner, styles.topRight]} />
-          <View style={[styles.corner, styles.bottomLeft]} />
-          <View style={[styles.corner, styles.bottomRight]} />
-        </View>
-        
-        <View style={styles.bottomOverlay} />
+
+      {/* Overlay simple solo con texto (sin marco) */}
+      <View style={styles.simpleOverlay} pointerEvents="none">
+        <Text style={styles.instructionText}>
+          Asegúrate de que la boleta se vea completa y sin reflejos
+        </Text>
       </View>
+
       
       {/* Botón de captura */}
       <View style={styles.captureContainer}>
@@ -271,59 +263,18 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
-  overlay: {
+  simpleOverlay: {
     position: "absolute",
-    top: 0,
+    top: 40,
     left: 0,
     right: 0,
-    bottom: 0,
-  },
-  topOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
     alignItems: "center",
-    paddingBottom: 20,
   },
   instructionText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "500",
     textAlign: "center",
-  },
-  scanFrame: {
-    height: 400,
-    marginHorizontal: 20,
-    position: "relative",
-  },
-  corner: {
-    position: "absolute",
-    width: 40,
-    height: 40,
-    borderColor: "#2f7d36",
-    borderWidth: 4,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderTopWidth: 0,
-    borderRightWidth: 0,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-  },
-  bottomOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
   },
   captureContainer: {
     position: "absolute",

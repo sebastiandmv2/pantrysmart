@@ -166,7 +166,9 @@ dev:
 	@sleep 10
 	@echo ""
 	@echo "5️⃣ Configurando URL del túnel..."
-	@TUNNEL_URL=$$(grep -o 'https://[^[:space:]]*\.trycloudflare\.com' .tunnel_output.tmp 2>/dev/null | head -1); \
+
+	# Captura moderna y robusta de URLs de Cloudflare
+	@TUNNEL_URL=$$(grep -Eo 'https://[^ ]+\.trycloudflare\.com' .tunnel_output.tmp | tail -1); \
 	if [ -n "$$TUNNEL_URL" ]; then \
 		echo "   🌐 Túnel generado: $$TUNNEL_URL"; \
 		sed -i.bak "s|API_URL: process.env.API_URL.*|API_URL: process.env.API_URL \|\| '$$TUNNEL_URL',|" mobile/config.js; \
@@ -179,10 +181,10 @@ dev:
 			echo "   ⚠️  Túnel aún no está listo, espera unos segundos"; \
 		fi; \
 	else \
-		echo "   ⚠️  No se detectó la URL automáticamente."; \
-		echo "   🔍 Revisa la salida arriba para la URL de Cloudflare"; \
-		echo "   📝 Luego ejecuta: make update-tunnel-url URL=https://tu-url.trycloudflare.com"; \
-		echo ""; \
+		echo "   ❌ ERROR: el túnel no se detectó"; \
+		echo "   🔍 URL real (mira arriba en la salida de Cloudflare)"; \
+		echo "   📝 Luego ejecuta: make update-tunnel-url URL=https://xxxx.trycloudflare.com"; \
+        exit 1; \
 	fi
 	@echo ""
 	@echo "6️⃣ Iniciando Expo con QR..."

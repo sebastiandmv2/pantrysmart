@@ -18,6 +18,13 @@ import ReceiptConfirmScreen from "../screens/ReceiptConfirmScreen";
 import AddProductScreen from "../screens/AddProductScreen";
 import InventoryScreen from "../screens/InventoryScreen";
 import RecipeDetailScreen from "../screens/RecipeDetailScreen";
+import ShoppingListScreen from "../screens/ShoppingListScreen";
+import AIRecipeGeneratorScreen from "../screens/AIRecipeGeneratorScreen";
+import AIRecipeResultsScreen from "../screens/AIRecipeResultsScreen";
+import UserListsScreen from "../screens/UserListsScreen";
+import UserListDetailScreen from "../screens/UserListDetailScreen";
+import AIRecipeDetailScreen from "../screens/AIRecipeDetailScreen";
+
 
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
@@ -110,12 +117,12 @@ function MainTabs() {
       />
 
       <Tabs.Screen
-        name="Inventory"
-        component={InventoryScreen}
+        name="ShoppingList"
+        component={UserListsScreen}
         options={{
-          title: "Inventario",
+          title: "Listas",
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="package-variant" size={size} color={color} />
+            <MaterialCommunityIcons name="format-list-checks" size={size} color={color} />
           ),
         }}
       />
@@ -148,6 +155,12 @@ export default function RootNavigator() {
       <Stack.Screen name="ReceiptConfirm" component={ReceiptConfirmScreen} options={{ headerShown: false }} />
       <Stack.Screen name="ReceiptDetail" component={ReceiptDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="RecipeDetail" component={RecipeDetailScreen} options={{ title: "Detalle de receta" }} />
+      <Stack.Screen name="Inventory" component={InventoryScreen} options={{ title: "Mi Inventario" }} />
+      <Stack.Screen name="UserLists" component={UserListsScreen} options={{ title: "Listas" }} />
+      <Stack.Screen name="UserListDetail" component={UserListDetailScreen} options={{ title: "Mi Lista" }} />
+      <Stack.Screen name="AIRecipeGenerator" component={AIRecipeGeneratorScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AIRecipeResults" component={AIRecipeResultsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AIRecipeDetail" component={AIRecipeDetailScreen} options={{ title: "Receta IA" }} />
     </Stack.Navigator>
   );
 }

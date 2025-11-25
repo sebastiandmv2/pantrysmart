@@ -336,3 +336,164 @@ class RecipeListItem(BaseModel):
         from_attributes = True
 
 
+# ===============================
+# AI RECIPE GENERATION SCHEMAS
+# ===============================
+
+class TimePreferenceEnum(str, Enum):
+    """Preferencias de tiempo de preparación"""
+    QUICK = "15"  # ≤15 min
+    MEDIUM = "30"  # ≤30 min
+    LONG = "60"    # ≤60 min
+
+class CuisineTypeEnum(str, Enum):
+    """Tipos de cocina"""
+    MEDITERRANEO = "mediterraneo"
+    CHILENO = "chileno"
+    ASIATICO = "asiatico"
+    VEGANO = "vegano"
+    VEGETARIANO = "vegetariano"
+    SIN_GLUTEN = "sin_gluten"
+
+class EquipmentEnum(str, Enum):
+    """Equipos de cocina disponibles"""
+    HORNO = "horno"
+    SARTEN = "sarten"
+    OLLA = "olla"
+    MICROONDAS = "microondas"
+    PARRILLA = "parrilla"
+    OLLA_PRESION = "olla_presion"
+
+class BudgetEnum(str, Enum):
+    """Niveles de presupuesto"""
+    BAJO = "bajo"
+    MEDIO = "medio"
+    LIBRE = "libre"
+
+class AIRecipeRequest(BaseModel):
+    """Request para generar recetas con IA"""
+    user_id: str = Field(..., max_length=100)
+    max_time_minutes: TimePreferenceEnum
+    servings: int = Field(..., ge=1, le=8)
+    difficulty: DifficultyLevelEnum
+    cuisine_types: List[CuisineTypeEnum] = Field(..., min_items=1)
+    available_equipment: List[EquipmentEnum] = Field(..., min_items=1)
+    budget: BudgetEnum
+    maximize_pantry_use: bool = True
+
+class GeneratedRecipeIngredient(BaseModel):
+    """Ingrediente de receta generada por IA"""
+    name: str
+    quantity: int
+    unit: str = "unidades"
+    is_optional: bool = False
+    notes: Optional[str] = None
+
+class GeneratedRecipe(BaseModel):
+    """Receta generada por IA (antes de guardar)"""
+    name: str
+    description: str
+    difficulty: DifficultyLevelEnum
+    prep_time_minutes: int
+    cook_time_minutes: Optional[int]
+    servings: int
+    instructions: str
+    tags: str
+    ingredients: List[GeneratedRecipeIngredient]
+    # Campos calculados
+    availability_percentage: Optional[float] = None
+    missing_ingredients: Optional[List[str]] = None
+    can_make: Optional[bool] = None
+
+class AIRecipeResponse(BaseModel):
+    """Respuesta con 3 recetas generadas por IA"""
+    recipes: List[GeneratedRecipe] = Field(..., min_items=3, max_items=3)
+    generation_time_seconds: float
+    user_inventory_items: int  # Cantidad de productos en inventario del usuario
+    prompt_used: Optional[str] = None  # Para debug
+
+class SaveGeneratedRecipeRequest(BaseModel):
+    """Request para guardar una receta generada"""
+    user_id: str = Field(..., max_length=100)
+    recipe: GeneratedRecipe
+
+
+# ===============================
+# SHOPPING LIST SCHEMAS
+# ===============================
+
+class ShoppingListItemStatusEnum(str, Enum):
+    """Estados de items en lista de compras"""
+    PENDING = "pending"
+    PURCHASED = "purchased"
+    CANCELLED = "cancelled"
+
+class ShoppingListItemPriorityEnum(int, Enum):
+    """Prioridades de items en lista de compras"""
+    HIGH = 1
+    MEDIUM = 2
+    LOW = 3
+
+class ShoppingListItemBase(BaseModel):
+    quantity_needed: int = Field(..., gt=0)
+    unit: str = Field(default="unidades", max_length=50)
+    notes: Optional[str] = Field(None, max_length=500)
+    priority: ShoppingListItemPriorityEnum = ShoppingListItemPriorityEnum.MEDIUM
+    estimated_price: Optional[float] = Field(None, ge=0)
+    store_to_buy: Optional[str] = Field(None, max_length=255)
+
+class ShoppingListItemCreate(ShoppingListItemBase):
+    user_id: str = Field(..., max_length=100)
+    product_id: int
+    added_from_recipe_id: Optional[int] = None
+    added_from_recipe_name: Optional[str] = Field(None, max_length=255)
+
+class ShoppingListItemUpdate(BaseModel):
+    quantity_needed: Optional[int] = Field(None, gt=0)
+    status: Optional[ShoppingListItemStatusEnum] = None
+    notes: Optional[str] = Field(None, max_length=500)
+    priority: Optional[ShoppingListItemPriorityEnum] = None
+    estimated_price: Optional[float] = Field(None, ge=0)
+    actual_price: Optional[float] = Field(None, ge=0)
+    store_to_buy: Optional[str] = Field(None, max_length=255)
+
+class ShoppingListItemOut(ShoppingListItemBase):
+    id: int
+    user_id: str
+    product_id: int
+    product: ProductOut
+    status: ShoppingListItemStatusEnum
+    added_from_recipe_id: Optional[int]
+    added_from_recipe_name: Optional[str]
+    actual_price: Optional[float]
+    purchased_date: Optional[datetime]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class AddToShoppingListRequest(BaseModel):
+    """Request para agregar ingredientes faltantes a lista de compras"""
+    user_id: str = Field(..., max_length=100)
+    ingredient_names: List[str] = Field(..., min_items=1)
+    recipe_id: Optional[int] = None
+    recipe_name: Optional[str] = Field(None, max_length=255)
+    priority: ShoppingListItemPriorityEnum = ShoppingListItemPriorityEnum.MEDIUM
+
+class BulkAddToShoppingListRequest(BaseModel):
+    """Request para agregar múltiples items a lista de compras"""
+    user_id: str = Field(..., max_length=100)
+    items: List[ShoppingListItemCreate] = Field(..., min_items=1, max_items=50)
+
+class ShoppingListSummary(BaseModel):
+    """Resumen de la lista de compras"""
+    total_items: int
+    pending_items: int
+    purchased_items: int
+    cancelled_items: int
+    estimated_total_cost: float
+    actual_total_cost: float
+    items_by_category: dict  # Cantidad de items por categoría
+
+

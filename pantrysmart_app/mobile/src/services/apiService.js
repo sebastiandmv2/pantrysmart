@@ -56,6 +56,19 @@ apiClient.interceptors.response.use(
   }
 );
 
+// Fetch sin timeout para operaciones largas (IA)
+const fetchNoTimeout = async (url, options = {}) => {
+  const response = await fetch(url, options);
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`HTTP ${response.status}: ${text}`);
+  }
+
+  return await response.json();
+};
+
+
 // Servicios de la API
 export const apiService = {
   // Health check con reintentos para túneles lentos
@@ -581,6 +594,121 @@ export const apiService = {
     }
   },
 
+  // Shopping List endpoints
+  shopping: {
+    addMissingIngredients: async (data) => {
+      const response = await fetch(`${config.API_URL}/shopping-list/add-missing-ingredients`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    getShoppingList: async (userId) => {
+      const response = await fetch(`${config.API_URL}/shopping-list/user/${userId}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    getSummary: async (userId) => {
+      const response = await fetch(`${config.API_URL}/shopping-list/user/${userId}/summary`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    markPurchased: async (itemId, actualPrice) => {
+      const url = `${config.API_URL}/shopping-list/items/${itemId}/mark-purchased${
+        actualPrice ? `?actual_price=${actualPrice}` : ""
+      }`;
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    updateItem: async (itemId, data) => {
+      const response = await fetch(`${config.API_URL}/shopping-list/items/${itemId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    deleteItem: async (itemId) => {
+      const response = await fetch(`${config.API_URL}/shopping-list/items/${itemId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        throw new Error(err);
+      }
+
+      return await response.json();
+    },
+
+    addToInventory: async (data) => {
+      const response = await fetch(`${config.API_URL}/inventory/add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) throw new Error(await response.text());
+      return await response.json();
+    },
+  },
+
+
   // Recipes endpoints
   recipes: {
     // Obtener lista de recetas con disponibilidad
@@ -687,6 +815,18 @@ export const apiService = {
       const data = await response.json();
       return data;
     },
+
+    // Generar recetas con IA (sin timeout)
+    generateWithAI: async (params) => {
+      return await fetchNoTimeout(`${config.API_URL}/recipes/generate-with-ai`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+      });
+    },
+
   },
 };
 
