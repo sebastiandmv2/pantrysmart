@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "Super-Pantry",
+    "slug": "Super-Pantry",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+
+    "ios": {
+      "supportsTablet": true
+    },
+
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "CAMERA"
+      ],
+      "package": "com.superpantry.app"
+    },
+
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir a Super-Pantry usar la cámara para escanear boletas."
+        }
+      ]
+    ],
+
+    "extra": {
+      "apiUrl": "http://localhost:8000"
+    },
+
+    "packagerOpts": {
+      "host": "0.0.0.0"
+    }
+  }
+}
