@@ -135,6 +135,11 @@ async def debug_upload(file: UploadFile = File(...)):
 @router.post("/receipts/extract-receipt", tags=["receipts"])
 async def extract_receipt(file: UploadFile = File(...)):
     from app.schemas import PRODUCT_TYPES
+    from app.product_mapping import normalize_product_name
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Se requiere una imagen (content-type image/*).")
 
@@ -172,59 +177,50 @@ async def extract_receipt(file: UploadFile = File(...)):
     try:
         raw = resp.choices[0].message.content
         data = json.loads(raw)
+        logger.info(f"🤖 IA extrajo {len(data.get('items', []))} items de la boleta")
     except Exception:
         raise HTTPException(status_code=500, detail="No se pudo parsear la respuesta JSON del modelo.")
 
-    # Mapeo de tipos similares a tipos válidos
-    TYPE_MAPPING = {
-        'Pasta': 'Fideos',
-        'Noodles': 'Fideos', 
-        'Espagueti': 'Fideos',
-        'Tallarines': 'Fideos',
-        'Leche condensada': 'Leche evaporada',
-        'Carne': 'Carne molida',
-        'Beef': 'Carne molida',
-        'Chicken': 'Pollo',
-        'Tuna': 'Atun',
-        'Bread': 'Pan',
-        'Milk': 'Leche',
-        'Cheese': 'Queso',
-        'Sugar': 'Azucar',
-        'Rice': 'Arroz',
-        'Egg': 'Huevo',
-        'Eggs': 'Huevo',
-        'Apple': 'Manzana',
-        'Banana': 'Platano',
-        'Onion': 'Cebolla',
-        'Tomato': 'Tomate',
-        'Garlic': 'Ajo',
-        'Carrot': 'Zanahoria',
-        'Galletas': 'Otros',
-        'Cereales': 'Otros',
-        'Bebida': 'Otros'
-    }
-    
-    # Filtrar solo items de inventario y transformar estructura
+    # 🎯 SISTEMA MEJORADO DE MAPEO DE PRODUCTOS
     inventory_items = []
+    mapping_stats = {"ai_correct": 0, "mapped_fixed": 0, "fallback_otros": 0}
+    
     for item in data.get("items", []):
         if item.get("is_inventario", False):
-            product_type = item["Producto"]
-            # Mapear tipos similares si es necesario
-            if product_type in TYPE_MAPPING:
-                product_type = TYPE_MAPPING[product_type]
-            # Si aún no es válido, usar "Otros"
-            elif product_type not in PRODUCT_TYPES:
-                product_type = "Otros"
+            original_name = item["NombreOriginal"]
+            ai_product_type = item["Producto"]
+            
+            # 1. Verificar si la IA ya lo clasificó correctamente
+            if ai_product_type in PRODUCT_TYPES:
+                final_product_type = ai_product_type
+                mapping_stats["ai_correct"] += 1
+                logger.debug(f"✅ IA correcta: '{original_name}' -> '{final_product_type}'")
+            else:
+                # 2. Usar nuestro sistema de mapeo inteligente
+                mapped_type = normalize_product_name(original_name)
+                final_product_type = mapped_type
+                
+                if mapped_type != "Otros":
+                    mapping_stats["mapped_fixed"] += 1
+                    logger.info(f"🔧 Mapeo corregido: '{original_name}' (IA: '{ai_product_type}') -> '{final_product_type}'")
+                else:
+                    mapping_stats["fallback_otros"] += 1
+                    logger.warning(f"⚠️ Fallback a 'Otros': '{original_name}' (IA: '{ai_product_type}')")
                 
             inventory_items.append({
-                "product_name": item["NombreOriginal"],
-                "product_type": product_type,
+                "product_name": original_name,
+                "product_type": final_product_type,
                 "quantity": item["Cantidad"]
             })
     
+    # Log de estadísticas para debugging
+    logger.info(f"📊 Estadísticas de mapeo: IA correcta: {mapping_stats['ai_correct']}, "
+               f"Corregidos: {mapping_stats['mapped_fixed']}, Otros: {mapping_stats['fallback_otros']}")
+    
     return {
         "store": data.get("tienda", {}).get("sucursal_o_direccion"),
-        "items": inventory_items
+        "items": inventory_items,
+        "mapping_stats": mapping_stats  # Para debugging en desarrollo
     }
 
 @router.post("/receipts/confirm", response_model=ReceiptOut, tags=["receipts"])
@@ -308,3 +304,136 @@ def list_receipts_by_user(user_id: str, db: Session = Depends(get_db)):
     if not receipts:
         raise HTTPException(status_code=404, detail="No receipts found for this user")
     return receipts
+
+# ============================================================================
+# ENDPOINTS PARA DEMO Y DEBUGGING
+# ============================================================================
+
+@router.post("/receipts/test-mapping", tags=["receipts", "demo"])
+def test_product_mapping(product_name: str):
+    """
+    Endpoint para probar el mapeo de un producto específico.
+    Útil durante la demo para verificar cómo se mapea un producto.
+    """
+    from app.product_mapping import normalize_product_name, clean_text, extract_keywords
+    
+    if not product_name or not product_name.strip():
+        raise HTTPException(status_code=400, detail="product_name no puede estar vacío")
+    
+    # Procesar el producto
+    cleaned = clean_text(product_name)
+    keywords = extract_keywords(product_name)
+    mapped_type = normalize_product_name(product_name)
+    
+    return {
+        "original": product_name,
+        "cleaned": cleaned,
+        "keywords": keywords,
+        "mapped_type": mapped_type,
+        "is_valid": mapped_type != "Otros",
+        "timestamp": "2024-01-01T00:00:00Z"  # Para debugging
+    }
+
+@router.post("/receipts/add-mapping", tags=["receipts", "demo"])
+def add_custom_product_mapping(original_text: str, canonical_type: str):
+    """
+    Endpoint para agregar un mapeo personalizado durante la demo.
+    Si un producto no se reconoce bien, puedes usar este endpoint para corregirlo.
+    """
+    from app.product_mapping import add_custom_mapping
+    from app.schemas import PRODUCT_TYPES
+    
+    if not original_text or not original_text.strip():
+        raise HTTPException(status_code=400, detail="original_text no puede estar vacío")
+    
+    if canonical_type not in PRODUCT_TYPES:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"canonical_type debe ser uno de: {PRODUCT_TYPES}"
+        )
+    
+    success = add_custom_mapping(original_text.strip(), canonical_type)
+    
+    if success:
+        # Verificar que el mapeo funciona
+        from app.product_mapping import normalize_product_name
+        test_result = normalize_product_name(original_text)
+        
+        return {
+            "success": True,
+            "message": f"Mapeo agregado exitosamente",
+            "original_text": original_text,
+            "canonical_type": canonical_type,
+            "verification": test_result,
+            "works_correctly": test_result == canonical_type
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Error agregando el mapeo")
+
+@router.get("/receipts/mapping-stats", tags=["receipts", "demo"])
+def get_mapping_statistics():
+    """
+    Endpoint para obtener estadísticas del sistema de mapeo.
+    Útil para mostrar en la demo qué tan robusto es el sistema.
+    """
+    from app.product_mapping import get_mapping_stats
+    from app.schemas import PRODUCT_TYPES
+    
+    stats = get_mapping_stats()
+    
+    return {
+        "total_mappings": stats['total_mappings'],
+        "unique_canonical_types": stats['unique_types'],
+        "available_canonical_types": len(PRODUCT_TYPES),
+        "canonical_types": PRODUCT_TYPES,
+        "type_distribution": stats['type_distribution'],
+        "coverage_percentage": (stats['unique_types'] / len(PRODUCT_TYPES)) * 100
+    }
+
+@router.post("/receipts/batch-test-mapping", tags=["receipts", "demo"])
+def batch_test_product_mapping(product_names: List[str]):
+    """
+    Endpoint para probar múltiples productos a la vez.
+    Útil para validar una lista de productos antes de la demo.
+    """
+    from app.product_mapping import normalize_product_name
+    
+    if not product_names:
+        raise HTTPException(status_code=400, detail="product_names no puede estar vacío")
+    
+    if len(product_names) > 50:
+        raise HTTPException(status_code=400, detail="Máximo 50 productos por request")
+    
+    results = []
+    stats = {"total": 0, "mapped_correctly": 0, "fallback_to_otros": 0}
+    
+    for product_name in product_names:
+        if not product_name or not product_name.strip():
+            continue
+            
+        mapped_type = normalize_product_name(product_name.strip())
+        is_otros = mapped_type == "Otros"
+        
+        results.append({
+            "original": product_name.strip(),
+            "mapped_type": mapped_type,
+            "needs_attention": is_otros
+        })
+        
+        stats["total"] += 1
+        if is_otros:
+            stats["fallback_to_otros"] += 1
+        else:
+            stats["mapped_correctly"] += 1
+    
+    stats["success_rate"] = (stats["mapped_correctly"] / stats["total"]) * 100 if stats["total"] > 0 else 0
+    
+    return {
+        "results": results,
+        "statistics": stats,
+        "recommendations": [
+            f"Productos que necesitan mapeo personalizado: {stats['fallback_to_otros']}",
+            f"Tasa de éxito: {stats['success_rate']:.1f}%",
+            "Usa /receipts/add-mapping para corregir productos problemáticos"
+        ]
+    }

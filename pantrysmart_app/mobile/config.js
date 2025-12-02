@@ -1,7 +1,7 @@
 // Configuración de la aplicación móvil
 const config = {
   // URL de la API - CAMBIA ESTA URL SEGÚN TU SETUP
-  API_URL: process.env.API_URL || 'https://pdf-ryan-ferrari-revisions.trycloudflare.com',
+  API_URL: process.env.API_URL || 'https://varying-heel-databases-newspapers.trycloudflare.com',
   
   // Configuración de desarrollo
   DEV_MODE: typeof __DEV__ !== 'undefined' ? __DEV__ : true,
